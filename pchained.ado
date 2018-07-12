@@ -1,10 +1,12 @@
 * Plumpton with -mi impute chained-
 * Author: Simo Goshev
-* Date: 7/11/2018
+* Date: 7/12/2018
 * Version: 0.1
 *
 *
 *
+
+*** TODO: add parsing for by() in mi impute chained mioptions (basically keep the vars)
 
 
 ********************************************************************************
@@ -15,10 +17,10 @@
 capture program drop pchained
 program define pchained, eclass
 
-	syntax namelist [if], Panelvar(varlist) Timevar(varlist) /// 
+	syntax namelist [if], Panelvar(varlist) Timevar(varname) /// 
 						 [MType(string) SCOREtype(string) COVars(varlist fv) ///
 						  MIOptions(string) SAVEmidata(string)]
-	
+				  
 	qui {
 		*** namelist = unique stub names of the scale(s) to be imputed (takes multiple scales)
 		*** panelvar = cluster identifier (person, firm, country)
@@ -67,6 +69,21 @@ program define pchained, eclass
 			***  TODO: Better syntax here would be remove everything between a space and a period,
 			*** including the period!!!
 			local covarsrs "`=subinstr("`covars'", "i.","",.)'"
+			
+			*** Separate time invariant from time variant covariates
+			local cov_invar ""
+			local cov_var ""
+			foreach covar of local covarsrs {
+				tempvar mytest
+				bys `panelvar' `timevar': egen `mytest' = mean(`covar')
+				capture assert `mytest' == `covar'
+				if _rc ~= 0 {
+					local cov_var "`cov_var' `covar'"
+				}
+				else {
+					local cov_invar "`cov_invar' `covar'"
+				}
+			}	
 		}
 		
 		*** Collect the level of timevar
@@ -75,16 +92,57 @@ program define pchained, eclass
 		*** Keep only variables of interest	
 		keep `allitemsrs' `covarsrs' `panelvar' `timevar'
 		
-		*** Reshape to wide
 		
+		*** Reshape to wide
 		noi di _n in y "Reshaping to wide..."
-		reshape wide `allitemsrs' `covarsrs', i(`panelvar') j(`timevar')
+		reshape wide `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
 		* order _all, alpha  // useful for debugging
 		
 		*** Build syntax for mi impute chained ***
 		local mymisyntax ""
 		foreach el of local namelist {  // loop over scales
 			unab myscale: `el'*
+			
+			********************************************************************
+			*** Item checks
+			
+			*** Check for items that do not vary and exclude them
+			*** Check for items that have rare events
+			local mynewscale ""
+			local constant ""
+			local rare ""
+			noi di _n "Pre-imputation check of variables..."
+			foreach item of local myscale {
+				sum `item'
+				if (`r(min)' ~= `r(max)') & (`r(mean)' > 0.3 & `r(mean)' < 0.7) {
+					local mynewscale "`mynewscale' `item'"
+				}
+				else if (`r(min)' == `r(max)') {
+					local constant "`constant', `item'"
+					noi di "Warning: `item' excluded because it does not vary"
+				}
+				else {
+					local rare "`rare', `item'"
+					noi di "Warning: `item' excluded because of rare " ///
+					"0's (`=round((1-`r(mean)')*`=_N')'/`=_N') or " ///
+					"1's (`=round(`r(mean)'*`=_N')'/`=_N')"
+					
+				}
+				
+			}
+
+			********************************************************************
+				
+			*** Replace myscale with mynewscale
+			local myscale "`mynewscale'"
+			
+			* noi di _n "`myscale'"
+			
+			/*
+			foreach var of local myscale {
+				noi tab `var'
+			}
+			*/
 			
 			*** create the expressions for --include-- from remaining scales 
 			local remaining = trim(subinstr("`namelist'", "`el'","", .))
@@ -134,19 +192,20 @@ program define pchained, eclass
 					local rhs_imputed_pr "`rhs_imputed_pr' (`rhs')"
 				}
 				**** TODO: Here can test the var and adjust the mtype respectively (binary vs categorical)!!!
-				local mymodel "`mymodel' (`mtype', augment noimputed include(`include_items' `rhs_imputed_pr')) `depvar' " //can break of too many items*time-periods
+				local mymodel "`mymodel' (`mtype', noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' " //can break of too many items*time-periods
 			}
 		}
 		
 		*** If covariates are (not) present
 		if "`covars'" ~= "" {
-					
+
 			*** Build list of covariates in wide format
 			foreach cov of local covars {
 				fvunab mycov: `cov'*
 				local covars_wide "`covars_wide' `mycov'"
 			}
-		
+			* noi di "`covars_wide'"
+			
 			*** write out the exogenous vars and mi options
 			local model_endpart "= `covars_wide', `mioptions'"
 		}
@@ -169,7 +228,7 @@ program define pchained, eclass
 		noi mi impute chained `model_full'
 		
 		*** reshape to long
-		mi reshape long `allitemsrs' `covarsrs', i(`panelvar') j(`timevar')
+		mi reshape long `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
 		
 		*** rename vars to original names
 		foreach var of varlist `allitemsrs' {
