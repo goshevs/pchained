@@ -1,14 +1,12 @@
 * Plumpton with -mi impute chained-
 * Author: Simo Goshev
-* Date: 7/12/2018
-* Version: 0.1
+* Date: 7/13/2018
+* Version: 0.2
 *
 *
 *
 
-*** TODO: add parsing for by() in mi impute chained mioptions (basically keep the vars)
-
-
+*
 ********************************************************************************
 *** Program
 ********************************************************************************
@@ -19,17 +17,21 @@ program define pchained, eclass
 
 	syntax namelist [if], Panelvar(varlist) Timevar(varname) /// 
 						 [MType(string) SCOREtype(string) COVars(varlist fv) ///
-						  MIOptions(string) SAVEmidata(string)]
+						  MIOptions(string) SAVEmidata(string) TABle VALCheck]
+	** TODO: add parsing for by() in mi impute chained mioptions (basically to keep the vars)
+
 				  
 	qui {
-		*** namelist = unique stub names of the scale(s) to be imputed (takes multiple scales)
-		*** panelvar = cluster identifier (person, firm, country)
-		*** timevar  = time identifier
-		*** covars  = list of covariates
-		*** scoretype = mean or sum
-		*** mioptions = mi impute chained options to be passed on
-		*** mtype = type of imputation model (not yet done by var!)
+		*** namelist   = unique stub names of the scale(s) to be imputed (takes multiple scales)
+		*** panelvar   = cluster identifier (person, firm, country)
+		*** timevar    = time identifier
+		*** covars     = list of covariates
+		*** scoretype  = mean or sum
+		*** mioptions  = mi impute chained options to be passed on
+		*** mtype      = type of imputation model (?TODO?: not yet done by var!)
 		*** savemidata = save the mi data if desired
+		*** table      = print table of imputation variables
+		*** valcheck   = conduct a 0.3 < mean <0.7 test (for binary vars)
 		
 		
 		**** Specification of default values
@@ -59,6 +61,7 @@ program define pchained, eclass
 			*** rename variables in dataset and in the locals to facilitate reshape
 			foreach item of local myitems_`i' {
 				local allitemsrs "`allitemsrs' `item'_`timevar'" // can possibly break if too many items
+																 // ?TODO: transfer over to Mata?
 				ren `item' `item'_`timevar'
 			}
 			local ++i
@@ -67,7 +70,7 @@ program define pchained, eclass
 		*** Prepare covariates for reshape (remove any fvvar indicators)
 		if "`covars'" ~= "" {
 			***  TODO: Better syntax here would be remove everything between a space and a period,
-			*** including the period!!!
+			*** including the period!!! Subroutine??
 			local covarsrs "`=subinstr("`covars'", "i.","",.)'"
 			
 			*** Separate time invariant from time variant covariates
@@ -111,12 +114,37 @@ program define pchained, eclass
 			local mynewscale ""
 			local constant ""
 			local rare ""
-			noi di _n "Pre-imputation check of variables..."
+			
+			if "`valcheck'" ~= "" {
+				noi di _n "Pre-imputation check of variables..."
+			}
+			else {
+				noi di _n "Pre-imputation check for variables that do not vary..."
+			}
+			
 			foreach item of local myscale {
 				sum `item'
-				if (`r(min)' ~= `r(max)') & (`r(mean)' > 0.3 & `r(mean)' < 0.7) {
-					local mynewscale "`mynewscale' `item'"
+				if (`r(min)' ~= `r(max)') {  // & (`r(mean)' > 0.3 & `r(mean)' < 0.7) { // this is only for binary vars! TODO: subroutine for others
+					if "`valcheck'" == "" {
+						local mynewscale "`mynewscale' `item'"
+					}
+					else {
+						if (`r(mean)' > 0.3 & `r(mean)' < 0.7) {
+							local mynewscale "`mynewscale' `item'"
+						}
+						else {
+							local rare "`rare', `item'"
+							noi di "Warning: `item' excluded because of rare " ///
+							"0's (`=round((1-`r(mean)')*`r(N)')'/`r(N)') or " ///
+							"1's (`=round(`r(mean)'*`r(N)')'/`r(N)')"
+						}
+					}
 				}
+				else {
+					local constant "`constant', `item'"
+					noi di "Warning: `item' excluded because it does not vary"
+				}
+/*					
 				else if (`r(min)' == `r(max)') {
 					local constant "`constant', `item'"
 					noi di "Warning: `item' excluded because it does not vary"
@@ -128,7 +156,8 @@ program define pchained, eclass
 					"1's (`=round(`r(mean)'*`=_N')'/`=_N')"
 					
 				}
-				
+*/
+	
 			}
 
 			********************************************************************
@@ -138,11 +167,11 @@ program define pchained, eclass
 			
 			* noi di _n "`myscale'"
 			
-			/*
-			foreach var of local myscale {
-				noi tab `var'
+			if "`table'" ~= "" {
+				foreach var of local myscale {
+					noi tab `var'
+				}
 			}
-			*/
 			
 			*** create the expressions for --include-- from remaining scales 
 			local remaining = trim(subinstr("`namelist'", "`el'","", .))
@@ -191,7 +220,7 @@ program define pchained, eclass
 				foreach rhs of local rhs_imputed {
 					local rhs_imputed_pr "`rhs_imputed_pr' (`rhs')"
 				}
-				**** TODO: Here can test the var and adjust the mtype respectively (binary vs categorical)!!!
+				**** TODO: Here can test the var and adjust the mtype respectively (binary vs categorical vs continuous)!!!
 				local mymodel "`mymodel' (`mtype', noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' " //can break of too many items*time-periods
 			}
 		}
