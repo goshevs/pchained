@@ -10,20 +10,20 @@
 ********************************************************************************
 
 *** Add ado files to adopath
-adopath + "C:\Users\goshev\Desktop\gitProjects\plumpton\"
+* adopath + "C:\Users\goshev\Desktop\gitProjects\plumpton\"
 
 *** Examples
 *** One scale
 simdata
-pchained s1_i, p(id) t(time) cov(x1 i.x2 x3 y) score("sum") mio("add(1)")
+pchained s1_i, p(id) t(time) cov(x1 i.x2 x3 y) mio("add(1) chaindots")
 
 *** Two scales
 simdata
-pchained s1_i s2_i, p(id) t(time) cov(x1 i.x2 x3 y) score("sum") mio("add(1)")
+pchained s1_i s2_i, p(id) t(time) cov(x1 i.x2 x3 y) score("sum") mio("add(1) chaindots ")
 
 *** Three scales
 simdata
-pchained s1_i s2_i s3_i, p(id) t(time) cov(x1 i.x2 x3 y) score("sum") mio("add(1)")
+pchained s1_i s2_i s3_i, p(id) t(time) cov(x1 i.x2 x3 y) score("sum") mio("add(1) chaindots ")
 
 
 

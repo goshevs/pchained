@@ -78,7 +78,8 @@ program define pchained, eclass
 			local cov_var ""
 			foreach covar of local covarsrs {
 				tempvar mytest
-				bys `panelvar' `timevar': egen `mytest' = mean(`covar')
+				sort `panelvar' `timevar'
+				bys `panelvar': egen `mytest' = mean(`covar')
 				capture assert `mytest' == `covar'
 				if _rc ~= 0 {
 					local cov_var "`cov_var' `covar'"
@@ -89,6 +90,9 @@ program define pchained, eclass
 			}	
 		}
 		
+		noi di "Invariant: `cov_invar'"
+		noi di "Variant: `cov_var'"
+					
 		*** Collect the level of timevar
 		levelsof `timevar', local(timelevs)
 		
