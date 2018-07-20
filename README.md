@@ -1,7 +1,11 @@
 Repo for -pchained-
 ===
 
-Introdution
+*Maintainer*: Simo Goshev
+*Group*:      BC Research Services
+
+
+Introduction
 ---
 
 This is a new Stata command which conducts Plumpton-type 
