@@ -21,9 +21,10 @@ TODO
 Examples
 ---
 
-TODO
-Examples of using -pchained- could be found in 
-examples.do
+TODO  
+
+Examples of using -pchained- could be found in examples.do. Program 
+-simdata- in simdata.ado generates dummy data.
 
 
 
