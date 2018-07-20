@@ -1,8 +1,9 @@
 Repo for -pchained-
 ===
 
+*Developer*: Simo Goshev
 *Maintainer*: Simo Goshev  
-*Group*:      BC Research Services
+*Group*: BC Research Services
 
 
 Introduction
