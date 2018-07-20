@@ -1,4 +1,4 @@
-Repo for -pchained-
+Stata command -pchained-
 ===
 
 *Developer*: Simo Goshev  
