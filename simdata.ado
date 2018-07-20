@@ -1,4 +1,4 @@
-* Simulating data for Plumpton with -mi impute chained-
+* Simulating data for pchained --> Plumpton with -mi impute chained-
 * Author: Simo Goshev
 * Date: 7/11/2018
 * Version: 0.1
