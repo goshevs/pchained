@@ -5,7 +5,7 @@ Introdution
 ---
 
 This is a new Stata command which conducts Plumpton-type 
-chained imputation of scales.
+chained imputation of scales (Plumpton, 2016).
 
 Syntax
 ---
