@@ -16,8 +16,9 @@ TODO
 Examples
 ---
 
-Currently, examples of the application of -pchaines- could be found in 
-exmpales.do
+TODO
+Examples of using -pchained- could be found in 
+examples.do
 
 
 
