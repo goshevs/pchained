@@ -20,6 +20,12 @@ program define pchained, eclass
 						  MIOptions(string) SAVEmidata(string) TABle VALCheck]
 	** TODO: add parsing for by() in mi impute chained mioptions (basically to keep the vars)
 
+	*** Check of required packages are installed
+	cap which distinct
+	if _rc {
+		no error "This program requires package distinct. Please, install before proceeding."
+		
+	}
 				  
 	qui {
 		*** namelist   = unique stub names of the scale(s) to be imputed (takes multiple scales)
