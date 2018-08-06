@@ -1,7 +1,7 @@
 * Plumpton with -mi impute chained-
-* Author: Simo Goshev
-* Date: 7/20/2018
-* Version: 0.2
+* Authors: Simo Goshev, Zitong Liu
+* Date: 8/6/2018
+* Version: 0.21
 *
 *
 *
