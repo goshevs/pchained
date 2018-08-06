@@ -69,9 +69,23 @@ program define pchained, eclass
 			
 		*** Prepare covariates for reshape (remove any fvvar indicators)
 		if "`covars'" ~= "" {
-			***  TODO: Better syntax here would be remove everything between a space and a period,
-			*** including the period!!! Subroutine??
-			local covarsrs "`=subinstr("`covars'", "i.","",.)'"
+			***  TODO: Better syntax here would be remove everything between a space and a period. 
+			**** BY ZITONG: DONE. Though iteration seems awkward, there is no way in STATA that can avoid iteration. 
+			**** Assumption: What is before the dot is subtring that consists only characters and numbers.
+			**** Note Now allows both cases:
+			**** 1. Multiple ***.**** type of covars. 
+			**** 2. Start with ***.**** type of covars. 
+			**** TODO: cannot work if we have i.x1 and d.x1, you will get 2 x1 later. (think of put the earlier part to the end. )
+			
+			*** OLD SYNTAX
+			** local covarsrs "`=subinstr("`covars'", "i.","",.)'"
+			
+			*** NEW SYNTAX
+			local covarsrs ""
+			foreach covar of local covars {
+				local covarrs "`=regexr("`covar'", "^[a-zA-z0-9]+\.", "")'"
+				local covarsrs `covarsrs' `covarrs'			
+			}
 			
 			*** Separate time invariant from time variant covariates
 			local cov_invar ""
@@ -126,6 +140,97 @@ program define pchained, eclass
 				noi di _n "Pre-imputation check for variables that do not vary..."
 			}
 			
+			******** ZITONG's Note: 
+			**** About binary variables, categorical variables and continuous variables. 
+			**** We need more clear definition to define them: We need to know how the scales are constructed. 
+			**** Here are some reasons:
+			**** 1. Binary variable: Simo's rareness test assumes that binary variable has only 0 and 1. So there is no case
+			**** as in other datasets, in which variable "sex", a binary variable, has two values "1" and "3". 
+			**** 2. What is a categorical variable? What's the tolarance for "categories"? Smaller than 30, or something? 
+						
+			**** Temporary Definition of BINARY VARIABLE: 
+			**** Any variable with only 0 and 1 is binary. If a variable have 2 values but not exactly 0 and 1, it will also
+			**** be defined as a categorical variable. 
+			
+			**** Temoporary Definition of CONTINUOUS VARIABLE:
+			**** Distinct levels are more than half of the total nonmissing observations. 
+			
+			**** Temoporary Definition of CATEGORICAL VARIABLE: 
+			**** Not defined as binary or continuous. Not constant. 
+			
+			**** ADDED PART: display the type of each scale variable. 
+			**** QUESTION: only to scale? not covar? ( RIght now I assume only for scale) 
+			
+			**** Literally this part should put earlier but now let's put it here to be clearer. 
+			**** Maybe also should define a manual input as valcheck. Put ont TODO list. 
+			
+			local biscale "" // Binary variable names
+			local catscale "" // Catogorical variable names
+			local contscale "" // Continuous variable names
+						
+			foreach item of local myscale {
+				levelsof `item' 
+				if (r(levels) == "0 1")  {
+					local biscale "`biscale' `item'"
+					if "`valcheck'" == "" {
+						local mynewscale "`mynewscale' `item'"
+					}
+					else {
+						summarize `item'
+						if (`r(mean)' > 0.3 & `r(mean)' < 0.7) {
+							local mynewscale "`mynewscale' `item'"
+						}
+						else {
+							local rare "`rare', `item'"
+							noi di "Warning: `item' excluded because of rare " ///
+							"0's (`=round((1-`r(mean)')*`r(N)')'/`r(N)') or " ///
+							"1's (`=round(`r(mean)'*`r(N)')'/`r(N)')"
+							}		
+					}					
+				}
+					
+				else {
+					distinct `item'
+					scalar distvals = r(ndistinct)
+					if  ( distvals == 1) {
+						local constant "`constant', `item'"
+						noi di "Warning: `item' excluded because it does not vary"
+					}	// Constant
+					else { // Decide continuous or not. 
+						count if !missing(`item')
+						scalar totnonmis = r(N)
+						scalar ratio = distvals/totnonmis
+						if (ratio > 0.5) { // Continous Variable
+							local mynewscale "`mynewscale' `item'"
+							local contscale "`contscale' `item'"
+							noi di "`item' is a continous variable. Pass the pre-imputation check. "
+						}
+						else { // In the end, Categorical variables. 
+						**** Don't have time to complete this, I put it into my TODO list. 
+						
+							local catscale "`catscale' `item'"
+							local mynewscale "`mynewscale' `item'"
+							**** Use levelsof and count for different values. 
+							**** Usually One scale has same options for different subscales
+							**** Different scales have different options. 
+							**** Maybe I want to report a table here. 
+							
+						}
+					}
+				}
+			}
+			
+			**** Report a summary of pre-imputation check results: 
+			noi di "Pre-imputation check is done! Here is a summary:  " _newline  ///
+				"Constant Scales: `constant'" _newline ///
+				"Binary Scales: `biscale'" _newline ///
+				"Categorical Scales: `catscale'" _newline ///
+				"Continuous Scales: `contscale'" _newline ///
+				"Excluded by pre-imputation check: `constant' `rare'" _newline ///
+				"Pass the pre-imputation check: `mynewscale'"
+					
+					
+			/*
 			foreach item of local myscale {
 				sum `item'
 				if (`r(min)' ~= `r(max)') {  // & (`r(mean)' > 0.3 & `r(mean)' < 0.7) { // this is only for binary vars! TODO: subroutine for others
@@ -147,7 +252,10 @@ program define pchained, eclass
 				else {
 					local constant "`constant', `item'"
 					noi di "Warning: `item' excluded because it does not vary"
+					
 				}
+				*/
+				
 /*					
 				else if (`r(min)' == `r(max)') {
 					local constant "`constant', `item'"
