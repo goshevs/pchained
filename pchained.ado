@@ -32,9 +32,6 @@ program define pchained, eclass
 		*** mioptions  = mi impute chained options to be passed on
 		*** mtype      = type of imputation model (?TODO?: not yet done by var!)
 		*** savemidata = save the mi data if desired
-		*** table      = print table of imputation variables
-		*** valcheck   = conduct a 0.3 < mean <0.7 test (for binary vars)
-		
 		
 		**** Specification of default values
 		*** Default scoretype to mean
