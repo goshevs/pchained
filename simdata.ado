@@ -23,7 +23,7 @@ program define simdata
 	*** Generate dummy data
 	********************************************************************************
 
-	set obs 500
+	set obs 200
 	gen id = _n
 	expand 3
 	bys id: gen time = _n
