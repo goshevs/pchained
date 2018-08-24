@@ -259,10 +259,8 @@ program define pchained, eclass
 		
 	*** mi impute chained
 	noi di _n in y "Performing multiple imputation..."
-	
-	
-	***** By zitong: I temporarily put a "force" option to it. 
-	noi mi impute chained `model_full' force
+		
+	noi mi impute chained `model_full'
 	
 	*** reshape to long
 	mi reshape long `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
