@@ -1,7 +1,7 @@
 * Plumpton with -mi impute chained-
 * Authors: Simo Goshev, Zitong Liu
-* Date: 8/6/2018
-* Version: 0.21
+* Date: 8/27/2018
+* Version: 0.22
 *
 *
 *
@@ -114,14 +114,13 @@ program define pchained, eclass
 		
 		
 		*** Check item type as well as constant items and rare categories
-		local finalScale ""
 		foreach el of local namelist {  // loop over scales
-			
+		
 			local bin  "" // binary items
 			local cat  "" // multiple category items
 			local cont "" // continuous items
 			
-			local updated_scale ""   // admitted items
+			local finalScale ""   // admitted items
 			local constant ""        // constant items
 			local rare ""            // items with rare categories 
 			
@@ -129,12 +128,12 @@ program define pchained, eclass
 			unab myscale: `el'*
 			
 			foreach item of local myscale {  //iterate over items of scales
-				levelsof `item', local(levs)
+				levelsof `item', local(levs) // PROBLEMATIC; NEED TO CHANGE
 				if (`:word count `levs'' == 1)  {
 					local constant "`constant' `item'" 
 				}
 				else {
-					tab `item', matcell(freqs)
+					tab `item', matcell(freqs)   // PROBLEMATIC; NEED TO CHANGE
 					if (`r(r)' == 2 ) { // binary
 						local bin "`bin' `item'"
 					}
@@ -146,15 +145,18 @@ program define pchained, eclass
 							local rare "`rare' `item'"
 						}
 						else {
-							local updated_scale "`updated_scale' `item'"
+							local finalScale "`finalScale' `item'"
 						}
 					}
 					else {
 						local cont "`cont' `item'"
-						local updated_scale "`updated_scale' `item'"
+						local finalScale "`finalScale' `item'" //accumulate admissible items
 					}
 				}
-			}
+			} // end loop over items
+			
+			
+			* noi di "`finalScale'"
 			
 			*** Report results by scale
 			noi di _n "********************************************************" _n ///
@@ -167,66 +169,65 @@ program define pchained, eclass
 			"      Constant items: `constant'" _n ///
 			"      Categorical items with < 0 obs in a category: `rare'"
 						
-			noi di in y _n "Filtered scale: `updated_scale'"
+			noi di in y _n "Filtered scale: `finalScale'"
 			noi di "********************************************************" _n
+				
 			
-			*** Accumulate scales
+			*** create the expressions for --include-- from remaining scales 
+			local remaining = trim(subinstr("`namelist'", "`el'","", .))
+			* noi di "`remaining'"
 			
-			local finalScale "`finalScale' `updated_scale'"
-		}
-
-		* noi di "`finalScale'"
+			local include_items ""
 		
-		*** create the expressions for --include-- from remaining scales 
-		local remaining = trim(subinstr("`namelist'", "`el'","", .))
-		local include_items ""
-		
-		if "`remaining'" ~= "" {
-			*** Compute aggregates by the levels of timevar
-			foreach remscale of local remaining {
-				unab myitems: `remscale'*
-				foreach tlev of local timelevs {
-					local taggregs ""
-					foreach item of local myitems {	
-						if regexm("`item'", "^`remscale'[a-z0-9]*_`timevar'`tlev'$") {
-							local taggregs "`taggregs' `=regexs(0)'"
+			if "`remaining'" ~= "" {
+				*** Compute aggregates by the levels of timevar
+				foreach remscale of local remaining {
+					unab myitems: `remscale'*
+					foreach tlev of local timelevs {
+						local taggregs ""
+						foreach item of local myitems {	
+							if regexm("`item'", "^`remscale'[a-z0-9]*_`timevar'`tlev'$") {
+								local taggregs "`taggregs' `=regexs(0)'"
+							}
+						}
+						* noi di "`taggregs'"	
+						*** This is where we write out the functions
+						local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
+						if "`scoretype'" == "sum" {
+							local include_items "`include_items' (`mysum')"
+						}	
+						else if "`scoretype'" == "mean" {
+							local nitems: word count `taggregs'	
+							local include_items "`include_items' (`mysum'/`nitems')"
+						}
+						else {
+							di in r "`scoretype' is not allowed as a score type"
+							exit 198
 						}
 					}
-					* noi di "`taggregs'"	
-					*** This is where we write out the functions
-					local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
-					if "`scoretype'" == "sum" {
-						local include_items "`include_items' (`mysum')"
-					}	
-					else if "`scoretype'" == "mean" {
-						local nitems: word count `taggregs'	
-						local include_items "`include_items' (`mysum'/`nitems')"
-					}
-					else {
-						di in r "`scoretype' is not allowed as a score type"
-						exit 198
-					}
 				}
+				local include_items "`include_items'"
+				
+			} // end of remaing
+
+			* no di "`finalScale'"
+			* no di "`include_items'"
+			
+			*** write out the imputation models
+			foreach depvar of local finalScale {
+				local rhs_imputed = trim(subinstr("`finalScale'", "`depvar'", "", .))
+				
+				*** Include imputed variables in parenthesis
+				local rhs_imputed_pr ""
+				foreach rhs of local rhs_imputed {
+					local rhs_imputed_pr "`rhs_imputed_pr' (`rhs')"
+				}
+				**** TODO: Here can test the var and adjust the mtype respectively (binary vs categorical vs continuous)!!!
+				local mymodel "`mymodel' (`mtype', noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' " //can break of too many items*time-periods
 			}
-			local include_items "`include_items'"
-			
-			
-		}
+		}   // end of quietly
+	} // end of loop over scales
 	
-		*** write out the imputation models
-		foreach depvar of local finalScale {
-			local rhs_imputed = trim(subinstr("`finalScale'", "`depvar'", "", .))
-			
-			*** Include imputed variables in parenthesis
-			local rhs_imputed_pr ""
-			foreach rhs of local rhs_imputed {
-				local rhs_imputed_pr "`rhs_imputed_pr' (`rhs')"
-			}
-			**** TODO: Here can test the var and adjust the mtype respectively (binary vs categorical vs continuous)!!!
-			local mymodel "`mymodel' (`mtype', noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' " //can break of too many items*time-periods
-		}
-	}   // end of quietly
-		
 	*** If covariates are (not) present
 	if "`covars'" ~= "" {
 
