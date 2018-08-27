@@ -10,7 +10,7 @@ Introduction
 ---
 
 This is a new Stata command which conducts Plumpton-type 
-chained imputation of scales (Plumpton, 2016).
+chained imputation of scales using -mi impute chained- (Plumpton, 2016).
 
 Syntax
 ---
