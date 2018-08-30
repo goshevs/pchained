@@ -223,6 +223,14 @@ program define pchained, eclass
 					local rhs_imputed_pr "`rhs_imputed_pr' (`rhs')"
 				}
 				**** TODO: Here can test the var and adjust the mtype respectively (binary vs categorical vs continuous)!!!
+				
+				**** Note by Zitong: 
+				**** Give mtype 2 choice, manually overriding, and automatic way. 
+				**** continuous variable: regress (never try pmm, the STATA default realization of pmm always leads mistake). No augment
+				**** binary: logit. Use augment option
+				**** Ordered categorical variable: ologit, use augment option
+				**** No ordered categorical variable: mlogit, use augment option
+				
 				local mymodel "`mymodel' (`mtype', noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' " //can break of too many items*time-periods
 			}
 		}   // end of quietly
