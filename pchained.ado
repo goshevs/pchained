@@ -1,7 +1,7 @@
 * Plumpton with -mi impute chained-
 * Authors: Simo Goshev, Zitong Liu
-* Date: 8/27/2018
-* Version: 0.22
+* Date: 8/31/2018
+* Version: 0.23
 *
 *
 *
@@ -16,10 +16,10 @@ capture program drop pchained
 program define pchained, eclass
 
 	syntax namelist [if], Panelvar(varlist) Timevar(varname) /// 
-						 [MType(string) SCOREtype(string) COVars(varlist fv) ///
+						 [CONTinous(namelist) SCOREtype(string) COVars(varlist fv) ///
 						  MIOptions(string) SAVEmidata(string)]
-	** TODO: add parsing for by() in mi impute chained mioptions (basically to keep the vars)
 
+						  
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
 
@@ -29,23 +29,28 @@ program define pchained, eclass
 		*** timevar    = time identifier
 		*** covars     = list of covariates
 		*** scoretype  = mean or sum
-		*** mioptions  = mi impute chained options to be passed on
+		*** mioptions  = mi impute chained options to be passed on, by() is allowed here
 		*** mtype      = type of imputation model (?TODO?: not yet done by var!)
 		*** savemidata = save the mi data if desired
+		*** continous   = specify all stubs treated as continuous
+		
+		****** Zitong Modification: 
+		****** Dropped MType option (which model do I want to use)
+		****** Instead, Add one option CONTinous(namelist)
 		
 		**** Specification of default values
 		*** Default scoretype to mean
 		if "`scoretype'" == "" local scoretype "mean"
 		*** Default mioptions
 		if "`mioptions'" == "" local mioptions "add(5)"
-		*** Default model type
-		if "`mtype'" == "" local mtype "logit" // "mlogit", "auto"
+
 	
 		
 		tempfile originaldata
 		save "`originaldata'", replace
 			
 		* preserve
+				
 		
 		*** Collect all items of all scales
 		local i = 1
@@ -62,7 +67,13 @@ program define pchained, eclass
 				local allitemsrs "`allitemsrs' `item'_`timevar'" // can possibly break if too many items
 																 // ?TODO: transfer over to Mata?
 				ren `item' `item'_`timevar'
-			}
+			} // End loop over myitems_i
+						
+			**** Feed in variable type information
+			local iscont: list scale in continous
+			if `iscont' == 1 { // If stub is designated as continous variable, Take down the index `i'. It's the index for namelist
+			local user_contv_ind "`user_contv_ind' `i'"
+			} 
 			local ++i
 		}
 			
@@ -111,10 +122,12 @@ program define pchained, eclass
 		reshape wide `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
 		* order _all, alpha  // useful for debugging
 		
+		** We are to impute on WIDE variables. 
 		
-		
+		foreach el of local namelist {  // loop over stubs
+
+			local i = 1 // Counter that works with option CONTINOUS
 		*** Check item type as well as constant items and rare categories
-		foreach el of local namelist {  // loop over scales
 		
 			local bin  "" // binary items
 			local cat  "" // multiple category items
@@ -123,10 +136,11 @@ program define pchained, eclass
 			local finalScale ""   // admitted items
 			local constant ""        // constant items
 			local rare ""            // items with rare categories 
-			
-			*** Collect all items of the scale 
+			local cuscont ""		// Items designated as continous by user
+
+			*** Collect all items of the scale
 			unab myscale: `el'*
-			
+
 			foreach item of local myscale {  //iterate over items of scales
 				levelsof `item', local(levs) // PROBLEMATIC; NEED TO CHANGE
 				if (`:word count `levs'' == 1)  {
@@ -134,27 +148,38 @@ program define pchained, eclass
 				}
 				else {
 					tab `item', matcell(freqs)   // PROBLEMATIC; NEED TO CHANGE
-					if (`r(r)' == 2 ) { // binary
+					if (`r(r)' == 2 ) { // Binary
 						local bin "`bin' `item'"
-					}
+						local finalScale "`finalScale' `item'" // Modification: This line is lost in the previous version and we lost our binaries. 
+						**** The too scarce 0 or too scarce 1 problem should be here. 
+						}
 					if (`r(r)' < 10 ) {   // item is categorical; HARD CODED NEED TO CHANGE
 						local cat "`cat' `item'"
 						mata: st_numscalar("pCats", colsum(mm_cond(st_matrix("freqs") :< 0, 1,0)))  // 10 obs per cat; HARD CODED NEED TO CHANGE
+						**** IMPORTANT Zitong's Note. This might be problematic because there may exists some "rare categories" while we have enough points for other categories. 
 						
 						if (pCats > 0) {
 							local rare "`rare' `item'"
 						}
 						else {
-							local finalScale "`finalScale' `item'"
+							local finalScale "`finalScale' `item'" // Collect this part to categorical variable
+
+							local has_cus: list i in user_contv_ind // Relevant scale designated as continous
+							if `has_cus' { // Consistent with option CONTinous
+							local cat: list cat - item // Remove from categorical vars
+							local cuscont:  list cuscont | item  // Add it customized continous vars
+							}
+							
 						}
 					}
 					else {
 						local cont "`cont' `item'"
-						local finalScale "`finalScale' `item'" //accumulate admissible items
+						local finalScale "`finalScale' `item'" // Continous vars directly pass 
 					}
 				}
 			} // end loop over items
 			
+			local cont "`cont' `cuscont'" // Add cunstomized continous vars to continous vars list
 			
 			* noi di "`finalScale'"
 			
@@ -165,6 +190,7 @@ program define pchained, eclass
 			"Binary items: `bin'" _n ///
 			"Multiple category items: `cat'" _n ///
 			"Continuous items: `cont'" _n ///
+			"Designated as Continuous by user: `cuscont'" _n ///
 			"Excluded items: " _n ///
 			"      Constant items: `constant'" _n ///
 			"      Categorical items with < 0 obs in a category: `rare'"
@@ -229,12 +255,20 @@ program define pchained, eclass
 				**** continuous variable: regress (never try pmm, the STATA default realization of pmm always leads mistake). No augment
 				**** binary: logit. Use augment option
 				**** Ordered categorical variable: ologit, use augment option
-				**** No ordered categorical variable: mlogit, use augment option
 				
-				local mymodel "`mymodel' (`mtype', noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' " //can break of too many items*time-periods
-			}
-		}   // end of quietly
-	} // end of loop over scales
+				if `: list depvar in bin' {
+				local mymodel "`mymodel' (logit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
+				}
+				else if `: list depvar in cat' {
+				local mymodel "`mymodel' (ologit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
+				}
+				else {
+				local mymodel "`mymodel' (reg, noimputed include(`include_items' `rhs_imputed_pr')) `depvar' "				
+				}
+			} 
+		local ++i // Index increases with looping over scales(stubs)	
+		}   // end of loop over scales
+	} // end of quietly
 	
 	*** If covariates are (not) present
 	if "`covars'" ~= "" {
