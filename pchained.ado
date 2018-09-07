@@ -80,13 +80,11 @@ program define pchained, eclass
 		*** Prepare covariates for reshape
 		if "`covars'" ~= "" {
 
-			*** Remove factor syntax from variables
-			local covarsrs ""
-			foreach covar of local covars {
-				local covarrs "`=regexr("`covar'", "^[a-zA-z0-9]+\.", "")'"
-				local covarsrs `covarsrs' `covarrs'			
-			}
-			
+			*** Extract covariate names from covariate list (which is fvvarlist)
+			fvrevar `covars', list
+			local covarsrs "`r(varlist)'"
+			* noi di "`covarsrs'"
+		
 			*** Separate time invariant from time variant covariates
 			local cov_invar ""
 			local cov_var ""
