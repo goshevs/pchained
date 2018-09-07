@@ -1,6 +1,5 @@
 * Plumpton with -mi impute chained-
 * Authors: Simo Goshev, Zitong Liu
-* Date: 8/31/2018
 * Version: 0.23
 *
 *
@@ -11,7 +10,7 @@
 *** Program
 ********************************************************************************
 
-*** We start with data in long format
+*** We start with data in long form
 capture program drop pchained
 program define pchained, eclass
 
@@ -30,21 +29,23 @@ program define pchained, eclass
 		*** covars     = list of covariates
 		*** scoretype  = mean or sum
 		*** mioptions  = mi impute chained options to be passed on, by() is allowed here
-		*** mtype      = type of imputation model (?TODO?: not yet done by var!)
 		*** savemidata = save the mi data if desired
-		*** continous   = specify all stubs treated as continuous
-		
-		****** Zitong Modification: 
-		****** Dropped MType option (which model do I want to use)
-		****** Instead, Add one option CONTinous(namelist)
+		*** continous  = specify all stubs treated as continuous
 		
 		**** Specification of default values
 		*** Default scoretype to mean
 		if "`scoretype'" == "" local scoretype "mean"
-		*** Default mioptions
-		if "`mioptions'" == "" local mioptions "add(5)"
 
-	
+		*** Default mioptions
+		if "`mioptions'" == "" {
+			local mioptions "add(5)"
+		} // if not empty, check for by and retrieve the by varname
+		else if regexm("`mioptions'", "by\([a-zA-Z0-9]+\)") {
+			local myby "`=regexs(0)'"
+			gettoken left gr: myby, parse("(")
+			gettoken left gr: gr, parse("(")
+			gettoken byGroup right: gr, parse(")")
+		}
 		
 		tempfile originaldata
 		save "`originaldata'", replace
@@ -52,31 +53,30 @@ program define pchained, eclass
 		* preserve
 				
 		
-		*** Collect all items of all scales
-		local i = 1
+		*** Collect all items of all scales for reshape
 		local allitemsrs ""  // collection of all items (renamed for reshape)
 		foreach scale of local namelist {
-			capture unab myitems_`i': `scale'*
+			capture unab myitems: `scale'*
 			*** check whether elements of namelist are variables
 			if _rc != 0 {
 				di in r "Stub `scale' is not associated with a scale"
 				exit 111
 			}
 			*** rename variables in dataset and in the locals to facilitate reshape
-			foreach item of local myitems_`i' {
+			foreach item of local myitems {
 				local allitemsrs "`allitemsrs' `item'_`timevar'" // can possibly break if too many items
 																 // ?TODO: transfer over to Mata?
 				ren `item' `item'_`timevar'
 			} // End loop over myitems_i
 						
 			**** Feed in variable type information
-			local iscont: list scale in continous
-			if `iscont' == 1 { // If stub is designated as continous variable, Take down the index `i'. It's the index for namelist
-			local user_contv_ind "`user_contv_ind' `i'"
+			local isCont: list scale in continous
+			if `isCont' == 1 { 
+				local userDefCont "`userDefCont' `scale'"
 			} 
-			local ++i
 		}
-			
+		* noi di "`userDefCont'"
+		
 		*** Prepare covariates for reshape
 		if "`covars'" ~= "" {
 
@@ -115,7 +115,7 @@ program define pchained, eclass
 		levelsof `timevar', local(timelevs)
 		
 		*** Keep only variables of interest	
-		keep `allitemsrs' `covarsrs' `panelvar' `timevar'
+		keep `allitemsrs' `covarsrs' `panelvar' `timevar' `byGroup'
 		
 		*** Reshape to wide
 		noi di _n in y "Reshaping to wide..."
@@ -126,8 +126,9 @@ program define pchained, eclass
 		
 		foreach el of local namelist {  // loop over stubs
 
-			local i = 1 // Counter that works with option CONTINOUS
-		*** Check item type as well as constant items and rare categories
+			*local i = 1 // Counter that works with option CONTINOUS
+			
+			*** Check item type as well as constant items and rare categories
 		
 			local bin  "" // binary items
 			local cat  "" // multiple category items
@@ -141,45 +142,52 @@ program define pchained, eclass
 			*** Collect all items of the scale
 			unab myscale: `el'*
 
-			foreach item of local myscale {  //iterate over items of scales
-				levelsof `item', local(levs) // PROBLEMATIC; NEED TO CHANGE
-				if (`:word count `levs'' == 1)  {
-					local constant "`constant' `item'" 
+			*** User assignment to continuous
+			local userOverride: list el in userDefCont // check if scale is in user-defined
+			* noi di "Override: `userOverride'"
+			if (`userOverride' == 1) {
+				foreach item of local myscale {  //iterate over items of user-defined
+					levelsof `item', local(levs) // PROBLEMATIC; NEED TO CHANGE
+					if (`:word count `levs'' == 1)  {
+						local constant "`constant' `item'" 
+					}
+					local cuscont "`cuscont' `item'"  // add to customized continous vars
+					local finalScale "`finalScale' `item'"
 				}
-				else {
-					tab `item', matcell(freqs)   // PROBLEMATIC; NEED TO CHANGE
-					if (`r(r)' == 2 ) { // Binary
-						local bin "`bin' `item'"
-						local finalScale "`finalScale' `item'" // Modification: This line is lost in the previous version and we lost our binaries. 
-						**** The too scarce 0 or too scarce 1 problem should be here. 
-						}
-					if (`r(r)' < 10 ) {   // item is categorical; HARD CODED NEED TO CHANGE
-						local cat "`cat' `item'"
-						mata: st_numscalar("pCats", colsum(mm_cond(st_matrix("freqs") :< 0, 1,0)))  // 10 obs per cat; HARD CODED NEED TO CHANGE
-						**** IMPORTANT Zitong's Note. This might be problematic because there may exists some "rare categories" while we have enough points for other categories. 
-						
-						if (pCats > 0) {
-							local rare "`rare' `item'"
-						}
-						else {
-							local finalScale "`finalScale' `item'" // Collect this part to categorical variable
-
-							local has_cus: list i in user_contv_ind // Relevant scale designated as continous
-							if `has_cus' { // Consistent with option CONTinous
-							local cat: list cat - item // Remove from categorical vars
-							local cuscont:  list cuscont | item  // Add it customized continous vars
-							}
-							
-						}
+			}
+			else {			
+				*** Automatic assignment to all various types
+				foreach item of local myscale {  //iterate over items of scales
+					levelsof `item', local(levs) // PROBLEMATIC; NEED TO CHANGE
+					if (`:word count `levs'' == 1)  {
+						local constant "`constant' `item'" 
 					}
 					else {
-						local cont "`cont' `item'"
-						local finalScale "`finalScale' `item'" // Continous vars directly pass 
-					}
-				}
-			} // end loop over items
-			
-			local cont "`cont' `cuscont'" // Add cunstomized continous vars to continous vars list
+						tab `item', matcell(freqs)   // PROBLEMATIC; if item is continuous, this may break
+						if (`r(r)' < 10 ) {   // item is categorical; HARD CODED NEED TO CHANGE
+							mata: st_numscalar("pCats", colsum(mm_cond(st_matrix("freqs") :< 0, 1,0)))  // 0 obs per cat; HARD CODED NEED TO CHANGE
+							**** IMPORTANT Zitong's Note. This might be problematic because 
+							****   there may exists some "rare categories" while we have enough points for other categories. 
+							if (pCats > 0) {
+								local rare "`rare' `item'"
+							}
+							else {
+								if (`r(r)' == 2 ) { // Binary
+									local bin "`bin' `item'"
+								}
+								else {  // Multi-category
+									local cat "`cat' `item'"
+								}
+								local finalScale "`finalScale' `item'"
+							}
+						}
+						else {
+							local cont "`cont' `item'"
+							local finalScale "`finalScale' `item'" // Continous vars pass directly
+						}
+					} //end of else
+				} // end loop over items
+			} // and of else in userOverride
 			
 			* noi di "`finalScale'"
 			
@@ -189,8 +197,9 @@ program define pchained, eclass
 			"Constant items: `constant'" _n ///
 			"Binary items: `bin'" _n ///
 			"Multiple category items: `cat'" _n ///
-			"Continuous items: `cont'" _n ///
-			"Designated as Continuous by user: `cuscont'" _n ///
+			"Continuous items: " _n ///
+			"      Auto defined: `cont'" _n ///
+			"      User defined: `cuscont'" _n ///
 			"Excluded items: " _n ///
 			"      Constant items: `constant'" _n ///
 			"      Categorical items with < 0 obs in a category: `rare'"
@@ -198,7 +207,7 @@ program define pchained, eclass
 			noi di in y _n "Filtered scale: `finalScale'"
 			noi di "********************************************************" _n
 				
-			
+		
 			*** create the expressions for --include-- from remaining scales 
 			local remaining = trim(subinstr("`namelist'", "`el'","", .))
 			* noi di "`remaining'"
@@ -248,25 +257,23 @@ program define pchained, eclass
 				foreach rhs of local rhs_imputed {
 					local rhs_imputed_pr "`rhs_imputed_pr' (`rhs')"
 				}
-				**** TODO: Here can test the var and adjust the mtype respectively (binary vs categorical vs continuous)!!!
-				
+
 				**** Note by Zitong: 
 				**** Give mtype 2 choice, manually overriding, and automatic way. 
-				**** continuous variable: regress (never try pmm, the STATA default realization of pmm always leads mistake). No augment
+				**** continuous variable: regress (never try pmm, the Stata default realization of pmm always leads mistake). No augment
 				**** binary: logit. Use augment option
 				**** Ordered categorical variable: ologit, use augment option
 				
 				if `: list depvar in bin' {
-				local mymodel "`mymodel' (logit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
+					local mymodel "`mymodel' (logit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
 				}
 				else if `: list depvar in cat' {
-				local mymodel "`mymodel' (ologit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
+					local mymodel "`mymodel' (ologit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
 				}
 				else {
-				local mymodel "`mymodel' (reg, noimputed include(`include_items' `rhs_imputed_pr')) `depvar' "				
+					local mymodel "`mymodel' (reg, noimputed include(`include_items' `rhs_imputed_pr')) `depvar' "				
 				}
-			} 
-		local ++i // Index increases with looping over scales(stubs)	
+			} // end of foreach
 		}   // end of loop over scales
 	} // end of quietly
 	
