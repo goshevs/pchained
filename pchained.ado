@@ -100,14 +100,19 @@ program define pchained, eclass
 					local cov_invar "`cov_invar' `covar'"
 				}
 			}	
-		}
 		
-		*** Report covariates
-		noi di _n in y "********************************************************"
-		noi di in y "Covariates: "
-		noi di in y "    Time-invariant: `cov_invar'"
-		noi di in y "    Time-variant  : `cov_var'"
-		noi di "********************************************************"		
+			*** Report covariates
+			noi di _n in y "********************************************************"
+			noi di in y "Covariates: "
+			noi di in y "    Time-invariant: `cov_invar'"
+			noi di in y "    Time-variant  : `cov_var'"
+			noi di "********************************************************"		
+		}
+		else {
+			noi di _n in y "********************************************************"
+			noi di in y "No covariates included in the imputation model "
+			noi di "********************************************************"		
+		}
 		
 		*** Collect the level of timevar
 		levelsof `timevar', local(timelevs)
