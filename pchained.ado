@@ -150,6 +150,7 @@ program define pchained, eclass
 			* noi di "Override: `userOverride'"
 			if (`userOverride' == 1) {
 				foreach item of local myscale {  //iterate over items of user-defined
+					*** capture tab `item', matrow(vals) matcell(freq)
 					levelsof `item', local(levs) // PROBLEMATIC; NEED TO CHANGE
 					if (`:word count `levs'' == 1)  {
 						local constant "`constant' `item'" 
@@ -161,34 +162,44 @@ program define pchained, eclass
 			else {			
 				*** Automatic assignment to all various types
 				foreach item of local myscale {  //iterate over items of scales
-					levelsof `item', local(levs) // PROBLEMATIC; NEED TO CHANGE
-					if (`:word count `levs'' == 1)  {
-						local constant "`constant' `item'" 
-					}
-					else {
-						tab `item', matcell(freqs)   // PROBLEMATIC; if item is continuous, this may break
-						if (`r(r)' < 10 ) {   // item is categorical; HARD CODED NEED TO CHANGE
-							mata: st_numscalar("pCats", colsum(mm_cond(st_matrix("freqs") :< 0, 1,0)))  // 0 obs per cat; HARD CODED NEED TO CHANGE
-							**** IMPORTANT Zitong's Note. This might be problematic because 
-							****   there may exists some "rare categories" while we have enough points for other categories. 
-							if (pCats > 0) {
-								local rare "`rare' `item'"
+					capture tab `item', matrow(vals) matcell(freq)
+					if (_rc == 0) {  // if does not break tab
+						mata: st_numscalar("nCats", rows(st_matrix("vals")) // number of categories
+						if (nCats  < 10) {  // item is categorical; HARD CODED NEED TO CHANGE
+							if (nCats  == 1)  {
+								local constant "`constant' `item'" 
 							}
-							else {
-								if (`r(r)' == 2 ) { // Binary
-									local bin "`bin' `item'"
+							else {  // more than 1 categories
+								mata: st_numscalar("pCats", colsum(mm_cond(st_matrix("freqs") :< 0, 1,0))) // 0 obs per cat; HARD CODED NEED TO CHANGE 
+								**** IMPORTANT Zitong's Note. This might be problematic because 
+								****   there may exists some "rare categories" while we have enough points for other categories. 
+								if (pCats > 0) {
+									local rare "`rare' `item'"
 								}
-								else {  // Multi-category
-									local cat "`cat' `item'"
+								else {   // if not rare
+									if (nCats  == 2) {// Binary
+										local bin "`bin' `item'"
+									}
+									else {  // Multi-category
+										local cat "`cat' `item'"
+									}
+									local finalScale "`finalScale' `item'"
 								}
-								local finalScale "`finalScale' `item'"
 							}
-						}
-						else {
+						} // end of if  
+						else { // item is continuous
 							local cont "`cont' `item'"
 							local finalScale "`finalScale' `item'" // Continous vars pass directly
 						}
-					} //end of else
+					} //end of _rc == 0
+					else if (_rc == 134)  { // item is continuous
+						local cont "`cont' `item'"
+						local finalScale "`finalScale' `item'" // Continous vars pass directly
+					}
+					else {
+						di in r "Cannot classify `item'"
+						exit 1000
+					}
 				} // end loop over items
 			} // and of else in userOverride
 			
