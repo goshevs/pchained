@@ -1,11 +1,26 @@
 * Plumpton with -mi impute chained-
 * Authors: Simo Goshev, Zitong Liu
-* Version: 0.23
+* Version: 0.25
 *
 *
 *
+*
+*
+*
+*** SYNTAX ***
+*** namelist   = unique stub names of the scale(s) to be imputed (takes multiple scales)
+*** Panelvar   = cluster identifier (i.e. person, firm, country id)
+*** Timevar    = time/wave identifier
+*** CONTinous  = stub names of scales whose items should be treated as continuous
+*** SCOREtype  = mean score (default) or sum score
+*** COVars     = list of covariates, supports factor variable syntax 
+*** MIOptions  = mi impute chained options to be passed on (by() is also allowed)
+*** SAVEmidata = save the mi data; need to valid provide path and filename
+*** CATCutoff  = max number of categories/levels to classify as categorical; if fails --> classified as continuous
+*** MINCsize   = minium cell size required for item to be included in analysis; if fails --> classified as rare
+		
 
-*
+
 ********************************************************************************
 *** Program
 ********************************************************************************
@@ -15,23 +30,17 @@ capture program drop pchained
 program define pchained, eclass
 
 	syntax namelist [if], Panelvar(varlist) Timevar(varname) /// 
-						 [CONTinous(namelist) SCOREtype(string) COVars(varlist fv) ///
-						  MIOptions(string) SAVEmidata(string)]
+						 [CONTinous(namelist) SCOREtype(string) ///
+						  COVars(varlist fv) MIOptions(string) ///
+						  SAVEmidata(string) CATCutoff(integer 10) ///
+						  MINCsize(integer 0)]
 
 						  
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
 
 	qui {
-		*** namelist   = unique stub names of the scale(s) to be imputed (takes multiple scales)
-		*** panelvar   = cluster identifier (person, firm, country)
-		*** timevar    = time identifier
-		*** covars     = list of covariates
-		*** scoretype  = mean or sum
-		*** mioptions  = mi impute chained options to be passed on, by() is allowed here
-		*** savemidata = save the mi data if desired
-		*** continous  = specify all stubs treated as continuous
-		
+
 		**** Specification of default values
 		*** Default scoretype to mean
 		if "`scoretype'" == "" local scoretype "mean"
@@ -64,8 +73,7 @@ program define pchained, eclass
 			}
 			*** rename variables in dataset and in the locals to facilitate reshape
 			foreach item of local myitems {
-				local allitemsrs "`allitemsrs' `item'_`timevar'" // can possibly break if too many items
-																 // ?TODO: transfer over to Mata?
+				local allitemsrs "`allitemsrs' `item'_`timevar'" // may break if too many items
 				ren `item' `item'_`timevar'
 			} // End loop over myitems_i
 						
@@ -80,7 +88,7 @@ program define pchained, eclass
 		*** Prepare covariates for reshape
 		if "`covars'" ~= "" {
 
-			*** Extract covariate names from covariate list (which is fvvarlist)
+			*** Extract covariate names from covariate list (which may be fvvarlist)
 			fvrevar `covars', list
 			local covarsrs "`r(varlist)'"
 			* noi di "`covarsrs'"
@@ -127,10 +135,11 @@ program define pchained, eclass
 		
 		** We are to impute on WIDE variables. 
 		
+		*** Specify temp names for scalars and matrices
+		tempname vals freqs pCats nCats
+		
 		foreach el of local namelist {  // loop over stubs
-
-			*local i = 1 // Counter that works with option CONTINOUS
-			
+	
 			*** Check item type as well as constant items and rare categories
 		
 			local bin  "" // binary items
@@ -146,38 +155,50 @@ program define pchained, eclass
 			unab myscale: `el'*
 
 			*** User assignment to continuous
-			local userOverride: list el in userDefCont // check if scale is in user-defined
+			local userOverride: list el in userDefCont // is scale in user-defined?
 			* noi di "Override: `userOverride'"
 			if (`userOverride' == 1) {
 				foreach item of local myscale {  //iterate over items of user-defined
-					*** capture tab `item', matrow(vals) matcell(freq)
-					levelsof `item', local(levs) // PROBLEMATIC; NEED TO CHANGE
-					if (`:word count `levs'' == 1)  {
-						local constant "`constant' `item'" 
+					capture tab `item', matrow(`vals')
+					if (_rc == 0) {  // if does not break
+						mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
+						if (`nCats' == 1)  {
+							local constant "`constant' `item'" 
+						}
+						else { 
+							local cuscont "`cuscont' `item'"  // add to customized continous vars
+							local finalScale "`finalScale' `item'"
+						}
 					}
-					local cuscont "`cuscont' `item'"  // add to customized continous vars
-					local finalScale "`finalScale' `item'"
+					else if (_rc = 134) {
+						local cuscont "`cuscont' `item'"  // add to customized continous vars
+						local finalScale "`finalScale' `item'"
+					}
+					else {
+						di in r "Cannot classify `item'"
+						exit 1000
+					}	
 				}
 			}
 			else {			
 				*** Automatic assignment to all various types
 				foreach item of local myscale {  //iterate over items of scales
-					capture tab `item', matrow(vals) matcell(freq)
+					capture tab `item', matrow(`vals') matcell(`freqs')
 					if (_rc == 0) {  // if does not break tab
-						mata: st_numscalar("nCats", rows(st_matrix("vals")) // number of categories
-						if (nCats  < 10) {  // item is categorical; HARD CODED NEED TO CHANGE
-							if (nCats  == 1)  {
+						mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
+						if (`nCats'  < `catcutoff') {  // item is categorical
+							if (`nCats'  == 1)  {
 								local constant "`constant' `item'" 
 							}
 							else {  // more than 1 categories
-								mata: st_numscalar("pCats", colsum(mm_cond(st_matrix("freqs") :< 0, 1,0))) // 0 obs per cat; HARD CODED NEED TO CHANGE 
+								mata: st_numscalar("`pCats'", colsum(mm_cond(st_matrix("`freqs'") :< `mincsize', 1,0))) // min # of obs per cat 
 								**** IMPORTANT Zitong's Note. This might be problematic because 
 								****   there may exists some "rare categories" while we have enough points for other categories. 
-								if (pCats > 0) {
+								if (`pCats' > 0) {
 									local rare "`rare' `item'"
 								}
 								else {   // if not rare
-									if (nCats  == 2) {// Binary
+									if (`nCats' == 2) { // Binary
 										local bin "`bin' `item'"
 									}
 									else {  // Multi-category
@@ -212,11 +233,11 @@ program define pchained, eclass
 			"Binary items: `bin'" _n ///
 			"Multiple category items: `cat'" _n ///
 			"Continuous items: " _n ///
-			"      Auto defined: `cont'" _n ///
-			"      User defined: `cuscont'" _n ///
+			"      Auto detected: `cont'" _n ///
+			"      User defined : `cuscont'" _n ///
 			"Excluded items: " _n ///
 			"      Constant items: `constant'" _n ///
-			"      Categorical items with < 0 obs in a category: `rare'"
+			"      Categorical items with < `mincsize' obs in a category: `rare'"
 						
 			noi di in y _n "Filtered scale: `finalScale'"
 			noi di "********************************************************" _n
@@ -289,63 +310,64 @@ program define pchained, eclass
 				}
 			} // end of foreach
 		}   // end of loop over scales
-	} // end of quietly
-	
-	*** If covariates are (not) present
-	if "`covars'" ~= "" {
 
-		*** Build list of covariates in wide format
-		foreach cov of local covars {
-			fvunab mycov: `cov'*
-			local covars_wide "`covars_wide' `mycov'"
+	
+		*** If covariates are (not) present
+		if "`covars'" ~= "" {
+
+			*** Build list of covariates in wide format
+			foreach cov of local covars {
+				fvunab mycov: `cov'*
+				local covars_wide "`covars_wide' `mycov'"
+			}
+			* noi di "`covars_wide'"
+			
+			*** write out the exogenous vars and mi options
+			local model_endpart "= `covars_wide', `mioptions'"
 		}
-		* noi di "`covars_wide'"
+		else {
+			local model_endpart ", `mioptions'"
+		}
 		
-		*** write out the exogenous vars and mi options
-		local model_endpart "= `covars_wide', `mioptions'"
-	}
-	else {
-		local model_endpart ", `mioptions'"
-	}
-	
-	*** Write out the complete model
-	local model_full "`mymodel' `model_endpart'"
-	* di "`model_full'"  // useful for debigging
+		*** Write out the complete model
+		local model_full "`mymodel' `model_endpart'"
+		* di "`model_full'"  // useful for debigging
+			
+		*** mi set the data
+		mi set flong
+		foreach scale of local namelist {
+			mi register imputed `scale'*
+		}
+
+		*** mi impute chained
+		noi di _n in y "Performing multiple imputation..."
 		
-	*** mi set the data
-	mi set flong
-	foreach scale of local namelist {
-		mi register imputed `scale'*
-	}
+		noi mi impute chained `model_full'
 		
-	*** mi impute chained
-	noi di _n in y "Performing multiple imputation..."
+		*** reshape to long
+		mi reshape long `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
 		
-	noi mi impute chained `model_full'
-	
-	*** reshape to long
-	mi reshape long `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
-	
-	*** rename vars to original names
-	foreach var of varlist `allitemsrs' {
-		ren `var' `=subinstr("`var'", "_`timevar'","",.)'
-	}
-	
-	*** Save the data
-	if "`savemidata'" ~= "" {
-		noi di _n in y "Saving mi dataset..."
-		save "`savemidata'", replace
-	}
-	
-	* restore
-	
-	*** Merge the midata into the original dataset
-	*mi set flong
-	noi di _n in y "Merging imputed dataset with original dataset..."
-	noi mi merge m:1 `panelvar' `timevar' using "`originaldata'", keep(match)
-	*mi merge 1:m `panelvar' `timevar' using "`savemidata'", keep(match)
-	mi update
-	
-	noi di _n in y "Imputation finished."
+		*** rename vars to original names
+		foreach var of varlist `allitemsrs' {
+			ren `var' `=subinstr("`var'", "_`timevar'","",.)'
+		}
+		
+		*** Save the data
+		if "`savemidata'" ~= "" {
+			noi di _n in y "Saving mi dataset..."
+			save "`savemidata'", replace
+		}
+		
+		* restore
+		
+		*** Merge the midata into the original dataset
+		*mi set flong
+		noi di _n in y "Merging imputed dataset with original dataset..."
+		noi mi merge m:1 `panelvar' `timevar' using "`originaldata'", keep(match)
+		*mi merge 1:m `panelvar' `timevar' using "`savemidata'", keep(match)
+		mi update
+		
+		noi di _n in y "Imputation finished."
+	} // end of quietly
 	
 end
