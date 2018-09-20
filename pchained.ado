@@ -67,7 +67,7 @@ program define pchained, eclass
 		foreach scale of local namelist {
 			capture unab myitems: `scale'*
 			*** check whether elements of namelist are variables
-			if _rc != 0 {
+			if (_rc != 0) {
 				di in r "Stub `scale' is not associated with a scale"
 				exit 111
 			}
@@ -101,7 +101,7 @@ program define pchained, eclass
 				sort `panelvar' `timevar'
 				bys `panelvar': egen `mytest' = mean(`covar')
 				capture assert `mytest' == `covar'
-				if _rc ~= 0 {
+				if (_rc ~= 0) {
 					local cov_var "`cov_var' `covar'"
 				}
 				else {
@@ -133,7 +133,7 @@ program define pchained, eclass
 		reshape wide `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
 		* order _all, alpha  // useful for debugging
 		
-		** We are to impute on WIDE variables. 
+		** We are imputing with data in WIDE form. 
 		
 		*** Specify temp names for scalars and matrices
 		tempname vals freqs pCats nCats
@@ -170,7 +170,7 @@ program define pchained, eclass
 							local finalScale "`finalScale' `item'"
 						}
 					}
-					else if (_rc = 134) {
+					else if (_rc == 134) {
 						local cuscont "`cuscont' `item'"  // add to customized continous vars
 						local finalScale "`finalScale' `item'"
 					}
