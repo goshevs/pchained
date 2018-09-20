@@ -15,7 +15,7 @@
 *** SCOREtype  = mean score (default) or sum score
 *** COVars     = list of covariates, supports factor variable syntax 
 *** MIOptions  = mi impute chained options to be passed on (by() is also allowed)
-*** SAVEmidata = save the mi data; need to valid provide path and filename
+*** SAVEmidata = save the mi data; valid path and filename required
 *** CATCutoff  = max number of categories/levels to classify as categorical; if fails --> classified as continuous
 *** MINCsize   = minium cell size required for item to be included in analysis; if fails --> classified as rare
 		
