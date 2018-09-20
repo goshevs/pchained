@@ -24,7 +24,7 @@ pchained namelist [if], Panelvar(varlist) Timevar(varname)
 					    MINCsize(integer)]
 ```
 
-Required inputs:
+**Required inputs**
 
 
 | input       | description            |
@@ -34,20 +34,20 @@ Required inputs:
 | *Timevar*   | time/wave identifier |
 
 
-Options available to the user:
+**Options available to the user**
 
 
-| option      | description            |
-|-------------|------------------------|
-| CONTinous   | stub names of scales whose items should be treated as continuous |
-| SCOREtype   | mean score (default) or sum score |
-| COVars      | list of covariates, supports factor variable syntax  |
-| MIOptions   | mi impute chained options to be passed on (by() is also allowed) |
-| SAVEmidata  | save the mi data; valid path and filename required|
-| CATCutoff   | max number of categories/levels to classify as categorical; if fails --> classified as continuous |
-|             | default: 10 |
-| MINCsize    | minium cell size required for item to be included in analysis; if fails --> classified as rare |
-|             | default: 0 |
+| option       | description            |
+|--------------|------------------------|
+| *CONTinous*  | stub names of scales whose items should be treated as continuous |
+| *SCOREtype*  | mean score (default) or sum score |
+| *COVars*     | list of covariates, supports factor variable syntax  |
+| *MIOptions*  | mi impute chained options to be passed on (by() is also allowed) |
+| *SAVEmidata* | save the mi data; valid path and filename required|
+| *CATCutoff*  | max number of categories/levels to classify as categorical; if fails --> classified as continuous |
+|              | default: 10 |
+| *MINCsize*   | minium cell size required for item to be included in analysis; if fails --> classified as rare |
+|              | default: 0 |
 
 
 
