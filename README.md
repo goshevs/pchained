@@ -1,4 +1,4 @@
-Stata command -pchained-
+Stata command `pchained`
 ===
 
 *Developers*: Simo Goshev, Zitong Liu   
@@ -17,7 +17,7 @@ Syntax
 ---
 
 ```
-pchained namelist [if], Panelvar(varlist) Timevar(varname)
+pchained namelist [if] [in], Panelvar(varlist) Timevar(varname)
 					   [CONTinous(namelist) SCOREtype(string)
 					    COVars(varlist fv) MIOptions(string) 
 					    SAVEmidata(string) CATCutoff(integer)
@@ -48,10 +48,11 @@ pchained namelist [if], Panelvar(varlist) Timevar(varname)
 | *MIOptions*    | `mi impute chained` options to be passed on (`by()` is also allowed) |
 | *SAVEmidata*   | save the mi data; valid path and filename required |
 | *CATCutoff*    | maximum number of categories/levels to classify as categorical; if higher --> classified as continuous |
-|                | default: 10 |
+|                | default: `10` |
 | *MINCsize*     | minimum cell size required for item to be included in analysis; if lower --> classified as rare |
-|                | default: 0 |
-| *MERGOptions*  | merge options to be passed on to `merge` upon merging the imputed data with the original data; imputed dataset is *master*, original dataset is *using* |
+|                | default: `0` |
+| *MERGOptions*  | merge options to be passed on to `merge` upon merging the imputed data with the original data; 
+imputed dataset is *master*, original dataset is *using* |
 |                | default: `keep(match)` |
 
 
@@ -60,7 +61,7 @@ Working with sensitive data?
 ---
 
 If you are working with sensitive data, please ensure that you point Stata to a secure
-directory that it can use as a temporary directory. Please, see [this] 
+directory that it can use as a temporary directory. Please, see [this]
 (https://www.stata.com/support/faqs/data-management/statatmp-environment-variable/) reference for 
 instructions on how to do this.
 
