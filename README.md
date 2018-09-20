@@ -51,8 +51,7 @@ pchained namelist [if] [in], Panelvar(varlist) Timevar(varname)
 |                | default: `10` |
 | *MINCsize*     | minimum cell size required for item to be included in analysis; if lower --> classified as rare |
 |                | default: `0` |
-| *MERGOptions*  | merge options to be passed on to `merge` upon merging the imputed data with the original data; 
-imputed dataset is *master*, original dataset is *using* |
+| *MERGOptions*  | merge options to be passed on to `merge` upon merging the imputed data with the original data; imputed dataset is *master*, original dataset is *using* |
 |                | default: `keep(match)` |
 
 
@@ -61,8 +60,7 @@ Working with sensitive data?
 ---
 
 If you are working with sensitive data, please ensure that you point Stata to a secure
-directory that it can use as a temporary directory. Please, see [this]
-(https://www.stata.com/support/faqs/data-management/statatmp-environment-variable/) reference for 
+directory that it can use as a temporary directory. Please, see [this](https://www.stata.com/support/faqs/data-management/statatmp-environment-variable/) reference for 
 instructions on how to do this.
 
 
