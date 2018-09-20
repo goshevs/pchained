@@ -47,9 +47,9 @@ pchained namelist [if], Panelvar(varlist) Timevar(varname)
 | *COVars*     | list of covariates, supports factor variable syntax  |
 | *MIOptions*  | mi impute chained options to be passed on (by() is also allowed) |
 | *SAVEmidata* | save the mi data; valid path and filename required|
-| *CATCutoff*  | max number of categories/levels to classify as categorical; if fails --> classified as continuous |
+| *CATCutoff*  | maximum number of categories/levels to classify as categorical; if higher --> classified as continuous |
 |              | default: 10 |
-| *MINCsize*   | minium cell size required for item to be included in analysis; if fails --> classified as rare |
+| *MINCsize*   | minimum cell size required for item to be included in analysis; if lower --> classified as rare |
 |              | default: 0 |
 
 
