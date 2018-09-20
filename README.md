@@ -12,14 +12,20 @@ Introduction
 This is a new Stata command which implements Plumpton-type 
 chained imputation of scales using -mi impute chained- (Plumpton, 2016).
 
+
 Syntax
 ---
 
+```
 pchained namelist [if], Panelvar(varlist) Timevar(varname)
 					   [CONTinous(namelist) SCOREtype(string)
 					    COVars(varlist fv) MIOptions(string) 
 					    SAVEmidata(string) CATCutoff(integer)
 					    MINCsize(integer)]
+```
+
+The following list of options is available to the user:
+
 
 | option      | description            |
 |-------------|------------------------|
@@ -39,9 +45,11 @@ pchained namelist [if], Panelvar(varlist) Timevar(varname)
 
 
 
+
 Examples
 ---
 
+```
 *******************
 ***  One scale  ***
 
@@ -106,7 +114,7 @@ pchained s1_i s2_i s4_i, p(id) t(time) cont(s2_i) cov(x1 i.x2 x3 y) score("mean"
 
 simdata 1000 3
 pchained s1_i s4_i, p(id) t(time) cov(x1 i.x2 x3 y) score("sum") mio("add(1) chaindots by(group) rseed(123456)")
-
+```
 
 
 
