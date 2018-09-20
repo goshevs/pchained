@@ -21,7 +21,7 @@ pchained namelist [if], Panelvar(varlist) Timevar(varname)
 					   [CONTinous(namelist) SCOREtype(string)
 					    COVars(varlist fv) MIOptions(string) 
 					    SAVEmidata(string) CATCutoff(integer)
-					    MINCsize(integer)]
+					    MINCsize(integer)  MERGOptions(string)]
 ```
 <br>
 
@@ -51,8 +51,7 @@ pchained namelist [if], Panelvar(varlist) Timevar(varname)
 |                | default: 10 |
 | *MINCsize*     | minimum cell size required for item to be included in analysis; if lower --> classified as rare |
 |                | default: 0 |
-| *MERGOptions*  | merge options to be passed on to *-merge-* upon merging the imputed data with the original data;   
-                   imputed dataset is *master*, original dataset is *using* |
+| *MERGOptions*  | merge options to be passed on to *-merge-* upon merging the imputed data with the original data; imputed dataset is *master*, original dataset is *using* |
 |                | default: *keep(match)* |
 
 
