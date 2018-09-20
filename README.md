@@ -43,7 +43,7 @@ pchained namelist [if] [in], Panelvar(varlist) Timevar(varname)
 |----------------|------------------------|
 | *CONTinous*    | stub names of scales whose items should be treated as continuous |
 | *SCOREtype*    | mean score or sum score |
-|                | default: mean
+|                | default: `mean`
 | *COVars*       | list of covariates, supports factor variable syntax  |
 | *MIOptions*    | `mi impute chained` options to be passed on (`by()` is also allowed) |
 | *SAVEmidata*   | save the mi data; valid path and filename required |
