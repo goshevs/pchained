@@ -24,6 +24,7 @@ pchained namelist [if], Panelvar(varlist) Timevar(varname)
 					    MINCsize(integer)]
 ```
 <br>
+
 **Required inputs**
 
 
@@ -34,6 +35,7 @@ pchained namelist [if], Panelvar(varlist) Timevar(varname)
 | *Timevar*   | time/wave identifier |
 
 <br>
+
 **Options available to the user**
 
 
