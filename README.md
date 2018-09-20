@@ -51,7 +51,7 @@ pchained namelist [if], Panelvar(varlist) Timevar(varname)
 |                | default: 10 |
 | *MINCsize*     | minimum cell size required for item to be included in analysis; if lower --> classified as rare |
 |                | default: 0 |
-| *MERGOptions*  | merge options to be passed on to *-merge-* upon merging the imputed data with the original data;
+| *MERGOptions*  | merge options to be passed on to *-merge-* upon merging the imputed data with the original data;  
                    imputed dataset is *master*, original dataset is *using* |
 |                | default: *keep(match)* |
 
