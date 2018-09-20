@@ -18,7 +18,7 @@ set more off
 ***  One scale  ***
 
 *** Categorical items
-simdata 200 3
+simdata 500 3
 pchained s1_i, p(id) t(time) cov(x1 i.x2 x3 y) mio("add(1) chaindots rseed(123456)")
 
 *** Treat items as continuous

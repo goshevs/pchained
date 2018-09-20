@@ -18,7 +18,7 @@
 *** SAVEmidata = save the mi data; valid path and filename required
 *** CATCutoff  = max number of categories/levels to classify as categorical; if fails --> classified as continuous
 *** MINCsize   = minium cell size required for item to be included in analysis; if fails --> classified as rare
-		
+*** MERGOptions  = merge options to be passed on to merge upon merging the imputed data with the original data	
 
 
 ********************************************************************************
@@ -29,16 +29,18 @@
 capture program drop pchained
 program define pchained, eclass
 
-	syntax namelist [if], Panelvar(varlist) Timevar(varname) /// 
-						 [CONTinous(namelist) SCOREtype(string) ///
-						  COVars(varlist fv) MIOptions(string) ///
-						  SAVEmidata(string) CATCutoff(integer 10) ///
-						  MINCsize(integer 0)]
+	syntax namelist [if] [in], Panelvar(varlist) Timevar(varname) /// 
+						      [CONTinous(namelist) SCOREtype(string) ///
+						       COVars(varlist fv) MIOptions(string) ///
+						       SAVEmidata(string) CATCutoff(integer 10) ///
+						       MINCsize(integer 0) MERGOptions(string)]
 
 						  
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
 
+	marksample touse
+	
 	qui {
 
 		**** Specification of default values
@@ -56,9 +58,18 @@ program define pchained, eclass
 			gettoken byGroup right: gr, parse(")")
 		}
 		
+		*** Default mergoptions
+		if "`mergoptions'" == "" {
+			local mergoptions ", keep(match)"
+		}
+		else {
+			local mergoptions ", `mergoptions'"
+		}
+		
 		tempfile originaldata
 		save "`originaldata'", replace
-			
+		
+		drop if !`touse' // limit sample to user specified
 		* preserve
 				
 		
@@ -363,7 +374,7 @@ program define pchained, eclass
 		*** Merge the midata into the original dataset
 		*mi set flong
 		noi di _n in y "Merging imputed dataset with original dataset..."
-		noi mi merge m:1 `panelvar' `timevar' using "`originaldata'", keep(match)
+		noi mi merge m:1 `panelvar' `timevar' using "`originaldata'" `mergoptions'
 		*mi merge 1:m `panelvar' `timevar' using "`savemidata'", keep(match)
 		mi update
 		
