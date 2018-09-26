@@ -1,6 +1,6 @@
 * Plumpton with -mi impute chained-
 * Authors: Simo Goshev, Zitong Liu
-* Version: 0.25
+* Version: 0.3
 *
 *
 *
@@ -8,18 +8,19 @@
 *
 *
 *** SYNTAX ***
-*** namelist   = unique stub names of the scale(s) to be imputed (takes multiple scales)
-*** Panelvar   = cluster identifier (i.e. person, firm, country id)
-*** Timevar    = time/wave identifier
-*** CONTinous  = stub names of scales whose items should be treated as continuous
-*** SCOREtype  = mean score (default) or sum score
-*** COVars     = list of covariates, supports factor variable syntax 
-*** MIOptions  = mi impute chained options to be passed on (by() is also allowed)
-*** SAVEmidata = save the mi data; valid path and filename required
-*** CATCutoff  = max number of categories/levels to classify as categorical; if fails --> classified as continuous
-*** MINCsize   = minium cell size required for item to be included in analysis; if fails --> classified as rare
-*** MERGOptions  = merge options to be passed on to merge upon merging the imputed data with the original data	
-
+*** namelist    = unique stub names of the scale(s) to be imputed (takes multiple scales)
+*** Panelvar    = cluster identifier (i.e. person, firm, country id)
+*** Timevar     = time/wave identifier
+*** CONTinous   = stub names of scales whose items should be treated as continuous
+*** SCOREtype   = mean score (default) or sum score
+*** COVars      = list of covariates, supports factor variable syntax 
+*** MIOptions   = mi impute chained options to be passed on (by() is also allowed)
+*** SAVEmidata  = save the mi data; valid path and filename required
+*** CATCutoff   = max number of categories/levels to classify as categorical; if fails --> classified as continuous
+*** MINCsize    = minium cell size required for item to be included in analysis; if fails --> classified as rare
+*** MERGOptions = merge options to be passed on to merge upon merging the imputed data with the original data	
+*** USELabels   = use labels of item/scale if exist to classify items 	
+*** MODel       = user controls the imputation model used for a specific scale
 
 ********************************************************************************
 *** Program
@@ -33,7 +34,8 @@ program define pchained, eclass
 						      [CONTinous(namelist) SCOREtype(string) ///
 						       COVars(varlist fv) MIOptions(string) ///
 						       SAVEmidata(string) CATCutoff(integer 10) ///
-						       MINCsize(integer 0) MERGOptions(string)]
+						       MINCsize(integer 0) MERGOptions(string) ///
+							   MODel(string)]  //USELABels
 
 						  
 	*** Warn user they need moremata
@@ -66,6 +68,7 @@ program define pchained, eclass
 			local mergoptions ", `mergoptions'"
 		}
 		
+		*** Save original data
 		tempfile originaldata
 		save "`originaldata'", replace
 		
@@ -75,7 +78,7 @@ program define pchained, eclass
 		
 		*** Collect all items of all scales for reshape
 		local allitemsrs ""  // collection of all items (renamed for reshape)
-		foreach scale of local namelist {
+		foreach scale of local namelist {  // loop over scales
 			capture unab myitems: `scale'*
 			*** check whether elements of namelist are variables
 			if (_rc != 0) {
@@ -146,11 +149,16 @@ program define pchained, eclass
 		
 		** We are imputing with data in WIDE form. 
 		
-		*** Specify temp names for scalars and matrices
-		tempname vals freqs pCats nCats
+		**** Parse MODel (get model and options)
+		if `"`model'"' ~= "" {
+			parse_model `"`model'"' "_model"  // gives s(`scale'_model)
+		}
 		
-		foreach el of local namelist {  // loop over stubs
-	
+		*** Specify temp names for scalars and matrices
+		tempname vals freqs pCats nCats   
+		
+		foreach scale of local namelist {  // loop over scales
+			
 			*** Check item type as well as constant items and rare categories
 		
 			local bin  "" // binary items
@@ -163,10 +171,10 @@ program define pchained, eclass
 			local cuscont ""		// Items designated as continous by user
 
 			*** Collect all items of the scale
-			unab myscale: `el'*
-
+			unab myscale: `scale'*
+			
 			*** User assignment to continuous
-			local userOverride: list el in userDefCont // is scale in user-defined?
+			local userOverride: list scale in userDefCont // is scale in user-defined?
 			* noi di "Override: `userOverride'"
 			if (`userOverride' == 1) {
 				foreach item of local myscale {  //iterate over items of user-defined
@@ -191,12 +199,38 @@ program define pchained, eclass
 					}	
 				}
 			}
-			else {			
-				*** Automatic assignment to all various types
+			else {
+				*** Automatic assignment to all various types (may also have to look at the labels if exist!)
 				foreach item of local myscale {  //iterate over items of scales
+					
+					*** Retrieve label info if it exists ***
+					local labname: value label `item'
+					local labs ""
+					if "`labname'" ~= "" {
+						mata: values = .; text = ""
+						mata: st_vlload("`labname'", values, text); _transpose(values)
+						* mata: st_local("labs", invtokens(strofreal(values)))
+						mata: st_local("nCatsLab", strofreal(cols(values)))
+					}
+					
+					*** Observed values
 					capture tab `item', matrow(`vals') matcell(`freqs')
 					if (_rc == 0) {  // if does not break tab
 						mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
+
+/*
+						*** Giving labels precedence
+						if ("`uselabels'" ~= "") {  // user override for categories; use labels
+							if ("`nCatsLab'" ~= "") {
+								scalar `nCats' = `nCatsLab'
+							}
+							else {
+								di in r "No label exists for this item/scale."
+								exit 1000
+							}
+					}
+*/
+						* noi di `nCats'
 						if (`nCats'  < `catcutoff') {  // item is categorical
 							if (`nCats'  == 1)  {
 								local constant "`constant' `item'" 
@@ -239,7 +273,7 @@ program define pchained, eclass
 			
 			*** Report results by scale
 			noi di _n "********************************************************" _n ///
-			"Summary of pre-imputation checks for scale `el'*" _n  ///
+			"Summary of pre-imputation checks for scale `scale'*" _n  ///
 			"Constant items: `constant'" _n ///
 			"Binary items: `bin'" _n ///
 			"Multiple category items: `cat'" _n ///
@@ -255,7 +289,7 @@ program define pchained, eclass
 				
 		
 			*** create the expressions for --include-- from remaining scales 
-			local remaining = trim(subinstr("`namelist'", "`el'","", .))
+			local remaining = trim(subinstr("`namelist'", "`scale'","", .))
 			* noi di "`remaining'"
 			
 			local include_items ""
@@ -309,17 +343,26 @@ program define pchained, eclass
 				**** continuous variable: regress (never try pmm, the Stata default realization of pmm always leads mistake). No augment
 				**** binary: logit. Use augment option
 				**** Ordered categorical variable: ologit, use augment option
-				
-				if `: list depvar in bin' {
-					local mymodel "`mymodel' (logit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
-				}
-				else if `: list depvar in cat' {
-					local mymodel "`mymodel' (ologit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
+							
+				local userModel `"`s(`scale'_model)'"'
+				if (`"`userModel'"' == "") {
+					if `: list depvar in bin' {
+						local mymodel "`mymodel' (logit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
+					}
+					else if `: list depvar in cat' {
+						local mymodel "`mymodel' (ologit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
+					}
+					else {
+						local mymodel "`mymodel' (reg, noimputed include(`include_items' `rhs_imputed_pr')) `depvar' "				
+					}
 				}
 				else {
-					local mymodel "`mymodel' (reg, noimputed include(`include_items' `rhs_imputed_pr')) `depvar' "				
+					if (regexm("`userModel'", ",[ ]*") == 0) {
+						local userModel "`userModel', "
+					}
+					local mymodel "`mymodel' (`userModel' noimputed include(`include_items' `rhs_imputed_pr')) `depvar' "
 				}
-			} // end of foreach
+			} // end of loop over finalScale
 		}   // end of loop over scales
 
 	
@@ -339,8 +382,10 @@ program define pchained, eclass
 		else {
 			local model_endpart ", `mioptions'"
 		}
-		
+	
+
 		*** Write out the complete model
+		* noi di "`mymodel'"
 		local model_full "`mymodel' `model_endpart'"
 		* di "`model_full'"  // useful for debigging
 			
@@ -354,7 +399,7 @@ program define pchained, eclass
 		noi di _n in y "Performing multiple imputation..."
 		
 		noi mi impute chained `model_full'
-		
+
 		*** reshape to long
 		mi reshape long `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
 		
@@ -378,7 +423,44 @@ program define pchained, eclass
 		*mi merge 1:m `panelvar' `timevar' using "`savemidata'", keep(match)
 		mi update
 		
-		noi di _n in y "Imputation finished."
+		noi di _n in y "Imputation finished successfully."
+
+		
+		*** Return useful macros
+		ereturn local constantItems "`constant'"
+		ereturn local binaryItems  "`bin'"
+		ereturn local multiCategoryItems "`cat'"
+		ereturn local autoContinuousItems "`cont'"
+		ereturn local userContinuousItems "`cuscont'"
+		ereturn local rareItems "`rare'"
+		ereturn local imputedItems "`finalScale'"
+		
+	
+	
 	} // end of quietly
 	
 end
+
+
+
+*** Parser of the user input with multiple arguments of the type
+*** (sc1="logit, augment" sc2="pmm") and variations
+capture program drop parse_model
+program define parse_model, sclass
+	args myinput type 
+
+	local nlistex "[a-zA-Z,\(\)0-9= ]+"
+	local strregex "[a-zA-Z0-9_-]+[ ]*=[ ]*[\"]?[\']?`nlistex'[\"]?[\']?"
+
+	while regexm(`"`myinput'"', `"`strregex'"') {
+		local scale `=regexs(0)'
+		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
+		gettoken sname model_opts: scale, parse("=")
+		gettoken left model_opts: model_opts, parse("=")
+		local sname = trim("`sname'")
+		*** Post result
+		sreturn local `sname'`type' `model_opts'
+	}
+end
+
+
