@@ -31,11 +31,11 @@ capture program drop pchained
 program define pchained, eclass
 
 	syntax namelist [if] [in], Panelvar(varlist) Timevar(varname) /// 
-						      [CONTinous(namelist) SCOREtype(string) ///
-						       COVars(varlist fv) MIOptions(string) ///
+						      [CONTinous(namelist) SCOREtype(string asis) ///
+						       COVars(varlist fv) MIOptions(string asis) ///
 						       SAVEmidata(string) CATCutoff(integer 10) ///
-						       MINCsize(integer 0) MERGOptions(string) ///
-							   MODel(string)]  //USELABels
+						       MINCsize(integer 0) MERGOptions(string asis) ///
+							   MODel(string asis)]  //USELABels
 
 						  
 	*** Warn user they need moremata
@@ -150,9 +150,11 @@ program define pchained, eclass
 		** We are imputing with data in WIDE form. 
 		
 		**** Parse MODel (get model and options)
-		if `"`model'"' ~= "" {
+		if `"`model'"' ~= `""' {
+			* noi di `"`model'"'
 			parse_model `"`model'"' "_model"  // gives s(`scale'_model)
 		}
+		* noi sreturn list
 		
 		*** Specify temp names for scalars and matrices
 		tempname vals freqs pCats nCats   
@@ -445,22 +447,27 @@ end
 
 *** Parser of the user input with multiple arguments of the type
 *** (sc1="logit, augment" sc2="pmm") and variations
+
 capture program drop parse_model
 program define parse_model, sclass
+
 	args myinput type 
 
-	local nlistex "[a-zA-Z,\(\)0-9= ]+"
-	local strregex "[a-zA-Z0-9_-]+[ ]*=[ ]*[\"]?[\']?`nlistex'[\"]?[\']?"
+	*** Parser absolutely does not work!!!
+	local nlistex "[a-zA-Z]+[,]?[a-zA-Z0-9\(\)= ]*"
+	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
 
 	while regexm(`"`myinput'"', `"`strregex'"') {
 		local scale `=regexs(0)'
 		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
 		gettoken sname model_opts: scale, parse("=")
 		gettoken left model_opts: model_opts, parse("=")
+		local model_opts = trim(`"`model_opts'"')
+		local model_opts = subinstr(`"`model_opts'"', `"""',"",.)
+		local model_opts = subinstr(`"`model_opts'"', `"'"',"",.)
 		local sname = trim("`sname'")
+		noi di "`sname'"
 		*** Post result
 		sreturn local `sname'`type' `model_opts'
 	}
 end
-
-
