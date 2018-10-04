@@ -114,7 +114,7 @@ pchained s1_i s2_i s3_i, p(id) t(time) cov(x1 i.x2 x3 y) score(mean) mio(add(1) 
 *** Treat some scales as continuous
 simdata 200 3
 pchained s1_i s2_i s3_i, p(id) t(time) cont(s2_i) cov(x1 i.x2 x3 y) score(mean) /// 
-						 mio(add(1) chaindots rseed(123456))
+                         mio(add(1) chaindots rseed(123456))
 
 
 *** Some scales/items continuous by design
@@ -125,7 +125,7 @@ pchained s1_i s3_i s4_i, p(id) t(time) cov(x1 i.x2 x3 y) score(mean) mio(add(1) 
 *** Mixed, s4_i by design is cont, s2_i user defined as cont
 simdata 200 3
 pchained s1_i s2_i s4_i, p(id) t(time) cont(s2_i) cov(x1 i.x2 x3 y) score(mean) ///
-						 mio(add(1) chaindots rseed(123456))
+                         mio(add(1) chaindots rseed(123456))
 
 
 
@@ -134,7 +134,7 @@ pchained s1_i s2_i s4_i, p(id) t(time) cont(s2_i) cov(x1 i.x2 x3 y) score(mean) 
 
 simdata 1000 3
 pchained s1_i s4_i, p(id) t(time) cov(x1 i.x2 x3 y) score(sum) ///
-					mio(add(1) chaindots by(group) rseed(123456))
+                    mio(add(1) chaindots by(group) rseed(123456))
 
 ```
 
