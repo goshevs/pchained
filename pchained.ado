@@ -465,7 +465,7 @@ program define parse_model, sclass
 		local model_opts = subinstr(`"`model_opts'"', `"""',"",.)
 		local model_opts = subinstr(`"`model_opts'"', `"'"',"",.)
 		local sname = trim("`sname'")
-		noi di "`sname'"
+		* noi di "`sname'"
 		*** Post result
 		sreturn local `sname'`type' `model_opts'
 	}
