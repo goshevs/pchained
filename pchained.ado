@@ -453,7 +453,6 @@ program define parse_model, sclass
 
 	args myinput type 
 
-	*** Parser absolutely does not work!!!
 	local nlistex "[a-zA-Z]+[,]?[a-zA-Z0-9\(\)= ]*"
 	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
 
