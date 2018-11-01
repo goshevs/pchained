@@ -21,7 +21,7 @@
 *** MERGOptions = merge options to be passed on to merge upon merging the imputed data with the original data	
 *** USELabels   = use labels of item/scale if exist to classify items 	
 *** MODel       = user controls the imputation model used for a specific scale
-
+*** METHod		= user can choose between 2 imputation methods: multiple imputation(this is default case) and FIML.
 ********************************************************************************
 *** Program
 ********************************************************************************
@@ -35,7 +35,7 @@ program define pchained, eclass
 						       COVars(varlist fv) MIOptions(string asis) ///
 						       SAVEmidata(string) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
-							   MODel(string asis)]  //USELABels
+							   MODel(string asis) METHod(string)]  //USELABels
 
 						  
 	*** Warn user they need moremata
@@ -288,7 +288,12 @@ program define pchained, eclass
 						
 			noi di in y _n "Filtered scale: `finalScale'"
 			noi di "********************************************************" _n
-				
+			
+			* Write part for using mplus: need REVISION
+			if ("`method'" == "FIML") { 
+			local vars_mplus "`vars_mplus' `finalScale'" // Add all finalScales to variable list for mplus
+			local catvars_mplus "`catvars_mplus' `bin' `cat'" // Add all binary and categorical variables to relevant list for mplus
+			} // End: get information for mplus
 		
 			*** create the expressions for --include-- from remaining scales 
 			local remaining = trim(subinstr("`namelist'", "`scale'","", .))
@@ -329,6 +334,7 @@ program define pchained, eclass
 
 			* no di "`finalScale'"
 			* no di "`include_items'"
+			
 			
 			*** write out the imputation models
 			foreach depvar of local finalScale {
@@ -389,8 +395,32 @@ program define pchained, eclass
 		*** Write out the complete model
 		* noi di "`mymodel'"
 		local model_full "`mymodel' `model_endpart'"
-		* di "`model_full'"  // useful for debigging
-			
+		* noi di "`model_full'"  // useful for debigging
+	    if ("`method'" ~= "FIML") { 
+		noi di _n in y "Performing multiple imputation..."
+		} 
+		else { // Rewrite the model to do FIML
+		* Define parts for using runmplus
+		* The syntax of runmplus:
+		* runmplus varlist, categorical(binary or ordinal categorical vars) model(var on varlist) 
+		* I need to double check on auxiliary variables. 
+		* Also need to try to get saved imputed data. Seems there is an option called "dataimputation", but it is not in the file. 
+		* We need to run it and see what result runmplus just provides. 
+		
+		foreach var of local vars_mplus {
+		replace `var' = -9999 if `var' == .
+		} // recode all missing vars before using mplus
+		noi di _n in y "Performing Full information maximum likelihood (FIML) imputation..."
+		local model_mplus ""
+		foreach item of local vars_mplus {
+		local model_mplus "`model_mplus' `item' on `: list vars_mplus - item' `covars_wide'; "
+		}
+		* noi di "`model_mplus'" // for debugging
+		local model_full_mplus "`vars_mplus' `covars_wide', categorical(`catvars_mplus') model(`model_mplus')"
+		noi di "This is the mplus command that I'll run: " _n
+		noi di "runmplus `model_full_mplus'"
+		} 
+		
 		*** mi set the data
 		mi set flong
 		foreach scale of local namelist {
@@ -398,7 +428,7 @@ program define pchained, eclass
 		}
 
 		*** mi impute chained
-		noi di _n in y "Performing multiple imputation..."
+* 		noi di _n in y "Performing multiple imputation..." // By Zitong: I put this to line 394 ahead. 
 		
 		noi mi impute chained `model_full'
 
