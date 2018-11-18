@@ -78,13 +78,12 @@ simdata 1000 3
 pchained s1_i s4_i, p(id) t(time) cov(x1 i.x2 x3 y) score(sum) mio(add(1) chaindots by(group) rseed(123456))
 
 
-********************
-***   Using FIML   ***
-* You need to install these packages: 
-*   runmplus, lstrfun,  findname, and  strparse to run. These can be obtained from the ssc. 
 
-simdata 200 3
-pchained s1_i s4_i, p(id) t(time) cov(x1 i.x2 x3 y) score(sum) method("FIML") mio(add(1) chaindots rseed(123456))
+******************************************
+***   Allowing Sampling Weight  ***
+
+* simdata 200 3
+* pchained s1_i s4_i, p(id) t(time) cov(x1 i.x2 x3 y) weight('the variable') 
 
 *** Generate aggregates off of imputed vars
 *mi xeq: egen s1_sum = rowtotal(s1*)
