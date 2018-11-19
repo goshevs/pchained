@@ -13,12 +13,13 @@ This is a new Stata command which implements Plumpton-type
 chained imputation of scales using `mi impute chained` (Plumpton, 2016).
 
 
-### Installation
+Installation
+---
 
 To load `pchained`, include the following line in your do file:
 
 ```
-https://raw.githubusercontent.com/goshevs/pchained-github/master/pchained.ado
+do "https://raw.githubusercontent.com/goshevs/pchained-github/master/pchained.ado"
 ```
 
 
