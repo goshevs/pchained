@@ -17,7 +17,7 @@ Syntax
 ---
 
 ```
-pchained namelist [if] [in], Panelvar(varlist) Timevar(varname)
+pchained namelist [if] [in] [weight], Panelvar(varlist) Timevar(varname)
 					   [CONTinous(namelist) SCOREtype(string)
 					    COVars(varlist fv) MIOptions(string) 
 					    SAVEmidata(string) CATCutoff(integer)
@@ -55,6 +55,10 @@ pchained namelist [if] [in], Panelvar(varlist) Timevar(varname)
 |                | default: `keep(match)` |
 | *MODel*        | user can pass a model and options to `mi impute chained` for each imputed scale |
 
+<br>
+
+`fweight`, `aweight`, `pweight` and `iweight` are allowed. However, different `mi impute chained` models may 
+impose restrictions. Please, see the help file of `mi impute chained` for further guidance.
 
 
 Working with sensitive data?
@@ -135,6 +139,14 @@ pchained s1_i s2_i s4_i, p(id) t(time) cont(s2_i) cov(x1 i.x2 x3 y) score(mean) 
 simdata 1000 3
 pchained s1_i s4_i, p(id) t(time) cov(x1 i.x2 x3 y) score(sum) ///
                     mio(add(1) chaindots by(group) rseed(123456))
+
+					
+					
+*************************
+***  Sampling Weight  ***
+
+simdata 500 3
+pchained s1_i s4_i [pw=weight], p(id) t(time) cov(x1 i.x2 x3 y) score(sum) mio(add(1) chaindots rseed(123456))
 
 ```
 

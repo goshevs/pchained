@@ -29,6 +29,11 @@ program define simdata
 		expand `waves'
 		bys id: gen time = _n
 
+		** Generate weight
+		bys id: gen weight = runiform() if _n ==1
+		bys id: replace weight = weight[1]
+		
+		** Generate covariates
 		bys id: gen x1 = round(5 + 5 * runiform()) if _n == 1
 		bys id: replace x1 = x1[_n -1] + 1 if _n > 1
 
@@ -50,8 +55,7 @@ program define simdata
 		bys id: replace x4 = cond(x4[1] < 0, 0, x4[1])
 		bys id: replace x4 = cond(runiform() > 0.3, x4[_n -1] + 1, x4[_n-1]) if _n > 1 
 
-
-
+		
 		** Scale 1:
 		forval i = 1/3 {
 			bys id: gen s1_i`i' = floor(2 * runiform() + ih) 

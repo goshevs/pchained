@@ -21,7 +21,6 @@
 *** MERGOptions = merge options to be passed on to merge upon merging the imputed data with the original data	
 *** USELabels   = use labels of item/scale if exist to classify items 	
 *** MODel       = user controls the imputation model used for a specific scale
-*** WEIGht		= the variable used to generate sampling weight
 
 ********************************************************************************
 *** Program
@@ -31,14 +30,16 @@
 capture program drop pchained
 program define pchained, eclass
 
-	syntax namelist [if] [in], Panelvar(varlist) Timevar(varname) /// 
+	syntax anything [if] [in] [pw aw fw iw/], Panelvar(varlist) Timevar(varname) /// 
 						      [CONTinous(namelist) SCOREtype(string asis) ///
 						       COVars(varlist fv) MIOptions(string asis) ///
 						       SAVEmidata(string) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
-							   MODel(string asis) WEIGht(varname)]  //USELABels
+							   MODel(string asis)] //USELABels
 
-						  
+	
+	local namelist "`anything'"
+	
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
 
@@ -141,7 +142,7 @@ program define pchained, eclass
 		levelsof `timevar', local(timelevs)
 		
 		*** Keep only variables of interest	
-		keep `allitemsrs' `covarsrs' `panelvar' `timevar' `byGroup'
+		keep `allitemsrs' `covarsrs' `panelvar' `timevar' `byGroup' `exp'
 		
 		*** Reshape to wide
 		noi di _n in y "Reshaping to wide..."
@@ -380,17 +381,17 @@ program define pchained, eclass
 			
 			*** write out the exogenous vars and mi options
 			
-			**** By Zitong: adding sampling weight. The syntax is a little bit lengtthy but more clear. 
+			**** By Zitong: adding sampling weight. The syntax is a little bit lengthy but more clear 
 			if "`weight'" ~= "" {
-			local model_endpart "= `covars_wide' [pw = `weight'], `mioptions'"// covars weight and mioptions
+				local model_endpart "= `covars_wide' [`weight'=`exp'], `mioptions'"  // covars weight and mioptions
 			}
 			else {
-			local model_endpart "= `covars_wide', `mioptions'"	// covars , and mioptions			
+				local model_endpart "= `covars_wide', `mioptions'"	// covars , and mioptions			
 			}
 		}
 		else {
 			if "`weight'" ~= "" {
-			local model_endpart "[pw = `weight'], `mioptions'"// weight, and mioptions
+				local model_endpart "[`weight'=`exp'], `mioptions'"  // weight, and mioptions
 			}
 			else {
 				local model_endpart ", `mioptions'" // Just mioptions			

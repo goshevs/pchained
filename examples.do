@@ -13,7 +13,6 @@ clear
 set more off
 
 
-
 *******************
 ***  One scale  ***
 
@@ -70,7 +69,6 @@ simdata 200 3
 pchained s1_i s2_i s4_i, p(id) t(time) cont(s2_i) cov(x1 i.x2 x3 y) score(mean) mio(add(1) chaindots rseed(123456))
 
 
-
 ********************
 ***   By group   ***
 
@@ -78,12 +76,12 @@ simdata 1000 3
 pchained s1_i s4_i, p(id) t(time) cov(x1 i.x2 x3 y) score(sum) mio(add(1) chaindots by(group) rseed(123456))
 
 
+*************************
+***  Sampling Weight  ***
 
-******************************************
-***   Allowing Sampling Weight  ***
+simdata 500 3
+pchained s1_i s4_i [pw=weight], p(id) t(time) cov(x1 i.x2 x3 y) score(sum) mio(add(1) chaindots rseed(123456))
 
-* simdata 200 3
-* pchained s1_i s4_i, p(id) t(time) cov(x1 i.x2 x3 y) weight('the variable') 
 
 *** Generate aggregates off of imputed vars
 *mi xeq: egen s1_sum = rowtotal(s1*)
