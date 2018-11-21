@@ -9,7 +9,7 @@
 *
 *** SYNTAX ***
 *** namelist    = unique stub names of the scale(s) to be imputed (takes multiple scales)
-*** Panelvar    = cluster identifier (i.e. person, firm, country id)
+*** Ivar    = cluster identifier (i.e. person, firm, country id)
 *** Timevar     = time/wave identifier
 *** CONTinous   = stub names of scales whose items should be treated as continuous
 *** SCOREtype   = mean score (default) or sum score
@@ -30,12 +30,12 @@
 capture program drop pchained
 program define pchained, eclass
 
-	syntax anything [if] [in] [pw aw fw iw/], Panelvar(varlist) Timevar(varname) /// 
+	syntax anything [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
 						      [CONTinous(namelist) SCOREtype(string asis) ///
 						       COVars(varlist fv) MIOptions(string asis) ///
 						       SAVEmidata(string) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
-							   MODel(string asis)] //USELABels
+							   MODel(string asis) debug] //USELABels
 
 	
 	local namelist "`anything'"
@@ -114,8 +114,8 @@ program define pchained, eclass
 			local cov_var ""
 			foreach covar of local covarsrs {
 				tempvar mytest
-				sort `panelvar' `timevar'
-				bys `panelvar': egen `mytest' = mean(`covar')
+				sort `ivar' `timevar'
+				bys `ivar': egen `mytest' = mean(`covar')
 				capture assert `mytest' == `covar'
 				if (_rc ~= 0) {
 					local cov_var "`cov_var' `covar'"
@@ -142,15 +142,20 @@ program define pchained, eclass
 		levelsof `timevar', local(timelevs)
 		
 		*** Keep only variables of interest	
-		keep `allitemsrs' `covarsrs' `panelvar' `timevar' `byGroup' `exp'
+		keep `allitemsrs' `covarsrs' `ivar' `timevar' `byGroup' `exp'
 		
 		*** Reshape to wide
 		noi di _n in y "Reshaping to wide..."
-		reshape wide `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
+		reshape wide `allitemsrs' `cov_var', i(`ivar') j(`timevar')
 		* order _all, alpha  // useful for debugging
 		
+		*** Undocumented feature, stop execution to debug after reshaping
+		if ("`debug'" ~= "") {
+			exit
+		}
+			
 		** We are imputing with data in WIDE form. 
-		
+			
 		**** Parse MODel (get model and options)
 		if `"`model'"' ~= `""' {
 			* noi di `"`model'"'
@@ -271,7 +276,7 @@ program define pchained, eclass
 						exit 1000
 					}
 				} // end loop over items
-			} // and of else in userOverride
+			} // end of else in userOverride
 			
 			* noi di "`finalScale'"
 			
@@ -327,7 +332,7 @@ program define pchained, eclass
 				}
 				local include_items "`include_items'"
 				
-			} // end of remaing
+			} // end of remaining
 
 			* no di "`finalScale'"
 			* no di "`include_items'"
@@ -416,7 +421,7 @@ program define pchained, eclass
 		noi mi impute chained `model_full'
 
 		*** reshape to long
-		mi reshape long `allitemsrs' `cov_var', i(`panelvar') j(`timevar')
+		mi reshape long `allitemsrs' `cov_var', i(`ivar') j(`timevar')
 		
 		*** rename vars to original names
 		foreach var of varlist `allitemsrs' {
@@ -434,8 +439,8 @@ program define pchained, eclass
 		*** Merge the midata into the original dataset
 		*mi set flong
 		noi di _n in y "Merging imputed dataset with original dataset..."
-		noi mi merge m:1 `panelvar' `timevar' using "`originaldata'" `mergoptions'
-		*mi merge 1:m `panelvar' `timevar' using "`savemidata'", keep(match)
+		noi mi merge m:1 `ivar' `timevar' using "`originaldata'" `mergoptions'
+		*mi merge 1:m `ivar' `timevar' using "`savemidata'", keep(match)
 		mi update
 		
 		noi di _n in y "Imputation finished successfully."
