@@ -56,6 +56,21 @@ program define simdata
 		bys id: replace x4 = cond(runiform() > 0.3, x4[_n -1] + 1, x4[_n-1]) if _n > 1 
 
 		
+		** Generate ovars and covars
+		bys id: gen y2 = round(1 + 6*runiform() + ih) if _n ==1
+		bys id: replace y2 = cond(y2[1] < 0, 0, y2[1])
+		bys id: replace y2 = y2[1] if _n > 1
+
+		bys id: gen y3 = round(5 + 5 * runiform()) if _n == 1
+		bys id: replace y3 = y3[_n -1] + 1 if _n > 1
+		
+		bys id: gen yx = round(5 + 5 * runiform()) if _n == 1
+		bys id: replace yx = yx[_n -1] + 1 if _n > 1
+		
+		bys id: gen yz = round(5 + 5 * runiform()) if _n == 1
+		bys id: replace yz = yz[_n -1] + 1 if _n > 1
+		
+				
 		** Scale 1:
 		forval i = 1/3 {
 			bys id: gen s1_i`i' = floor(2 * runiform() + ih) 
@@ -81,7 +96,7 @@ program define simdata
 			replace s4_i`i' = 0 if s4_i`i' < 0
 		}
 		
-		gen y = 0.5 + 1.5 * x1 - 0.5 * x2 + 1.5 * x3 + ih + rnormal()
+		gen y1 = 0.5 + 1.5 * x1 - 0.5 * x2 + 1.5 * x3 + ih + rnormal()
 
 		drop ih
 
@@ -92,7 +107,7 @@ program define simdata
 		*** Introduce missingness
 		********************************************************************************
 
-		foreach var of varlist s* {
+		foreach var of varlist s* y2 y3 {
 			replace `var' = . if runiform() <0.05
 		}
 

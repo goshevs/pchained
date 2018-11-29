@@ -13,6 +13,19 @@ clear
 set more off
 
 
+simdata 500 3
+pchained s1_i (y2, include(mean(s1_i)) omit(x1 i.x2)) (y3 i.yx x1 i.yz, include(y2 mean(s1_i)) noimputed), ///
+	          i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) ///
+			  mod(s1_i = "pmm, knn(3)" y2 = "poisson" y3 = "regress, nocons")
+
+*** TODO:
+*** y3 could be in the include for y2
+*** y2 could be in the include for y3
+*** y2 and y3 could be used for the scale items!
+
+exit
+
+
 *******************
 ***  One scale  ***
 

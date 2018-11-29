@@ -8,12 +8,12 @@
 *
 *
 *** SYNTAX ***
-*** namelist    = unique stub names of the scale(s) to be imputed (takes multiple scales)
+*** anything    = unique stub names of the scale(s) to be imputed (takes multiple scales)
 *** Ivar    = cluster identifier (i.e. person, firm, country id)
 *** Timevar     = time/wave identifier
 *** CONTinous   = stub names of scales whose items should be treated as continuous
 *** SCOREtype   = mean score (default) or sum score
-*** COVars      = list of covariates, supports factor variable syntax 
+*** SCALECOVars = list of covariates used for scale imputation, supports factor variable syntax 
 *** MIOptions   = mi impute chained options to be passed on (by() is also allowed)
 *** SAVEmidata  = save the mi data; valid path and filename required
 *** CATCutoff   = max number of categories/levels to classify as categorical; if fails --> classified as continuous
@@ -32,17 +32,42 @@ program define pchained, eclass
 
 	syntax anything [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
 						      [CONTinous(namelist) SCOREtype(string asis) ///
-						       COVars(varlist fv) MIOptions(string asis) ///
+						       SCALECOVars(varlist fv) MIOptions(string asis) ///
 						       SAVEmidata(string) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
 							   MODel(string asis) debug] //USELABels
 
-	
-	local namelist "`anything'"
-	
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
-
+	
+	*** Parse the anything string
+	_input_parser "`anything'"
+	
+	*** collect scale stub names
+	local namelist "`s(namelist)'" 
+	
+	*** collect variables that require imputation, their covariates and included vars
+	local extraModels = 1
+	local miDepVarsOriginal ""
+	local miCovVars ""
+	while `"`s(ovar`extraModels')'"' ~= "" {
+		_parse_ovar_model "`s(ovar`extraModels')'"
+		* noi sreturn list
+		local miDepVarsOriginal "`miDepVarsOriginal' `s(depv)'"
+		local miCovVars "`miCovVars' `s(covs)'"
+		local ++extraModels
+	}
+	
+	*** rename depVars
+	local miDepVars ""
+	foreach dVar of local miDepVarsOriginal {
+		local miDepVars "`miDepVars' `dVar'_`timevar'" // may break if too many items
+		ren `dVar' `dVar'_`timevar'
+	}
+			
+	* noi di "`miDepVars'"
+	* noi di "`miCovVars'"
+	
 	marksample touse
 	
 	qui {
@@ -101,11 +126,15 @@ program define pchained, eclass
 		}
 		* noi di "`userDefCont'"
 		
-		*** Prepare covariates for reshape
-		if "`covars'" ~= "" {
+		*** Get the union of scalecovars, miCovVars and miIncVars
+		local allcovars "`scalecovars' `miCovVars'"   // `miIncVars'"
+		local allcovars: list uniq allcovars
+				
+		*** Prepare all covariates for reshape
+		if "`allcovars'" ~= "" {
 
 			*** Extract covariate names from covariate list (which may be fvvarlist)
-			fvrevar `covars', list
+			fvrevar `allcovars', list
 			local covarsrs "`r(varlist)'"
 			* noi di "`covarsrs'"
 		
@@ -134,7 +163,7 @@ program define pchained, eclass
 		}
 		else {
 			noi di _n in y "********************************************************"
-			noi di in y "No covariates included in the imputation model "
+			noi di in y "No covariates included in the imputation models "
 			noi di "********************************************************"		
 		}
 		
@@ -142,26 +171,28 @@ program define pchained, eclass
 		levelsof `timevar', local(timelevs)
 		
 		*** Keep only variables of interest	
-		keep `allitemsrs' `covarsrs' `ivar' `timevar' `byGroup' `exp'
+		keep `allitemsrs' `miDepVars' `covarsrs' `ivar' `timevar' `byGroup' `exp'
 		
 		*** Reshape to wide
 		noi di _n in y "Reshaping to wide..."
-		reshape wide `allitemsrs' `cov_var', i(`ivar') j(`timevar')
-		* order _all, alpha  // useful for debugging
+		reshape wide `allitemsrs' `miDepVars' `cov_var', i(`ivar') j(`timevar')
+		order _all, alpha  // useful for debugging
 		
 		*** Undocumented feature, stop execution to debug after reshaping
 		if ("`debug'" ~= "") {
+			noi di "Debugging interruption requested."
 			exit
 		}
 			
-		** We are imputing with data in WIDE form. 
 			
+		** We are imputing with data in WIDE form. 
+
 		**** Parse MODel (get model and options)
 		if `"`model'"' ~= `""' {
 			* noi di `"`model'"'
-			parse_model `"`model'"' "_model"  // gives s(`scale'_model)
+			_parse_model `"`model'"' "_model"  // gives s(`scale'_model)
 		}
-		* noi sreturn list
+		*noi sreturn list
 		
 		*** Specify temp names for scalars and matrices
 		tempname vals freqs pCats nCats   
@@ -337,7 +368,7 @@ program define pchained, eclass
 			* no di "`finalScale'"
 			* no di "`include_items'"
 			
-			*** write out the imputation models
+			*** write out the imputation models for the scales
 			foreach depvar of local finalScale {
 				local rhs_imputed = trim(subinstr("`finalScale'", "`depvar'", "", .))
 				
@@ -375,10 +406,10 @@ program define pchained, eclass
 		}   // end of loop over scales
 
 		
-		*** If covariates are (not) present
-		if "`covars'" ~= "" {
+		*** If covariates and weights are (not) provided
+		if "`scalecovars'" ~= "" {
 			*** Build list of covariates in wide format
-			foreach cov of local covars {
+			foreach cov of local scalecovars {
 				fvunab mycov: `cov'*
 				local covars_wide "`covars_wide' `mycov'"
 			}
@@ -402,29 +433,152 @@ program define pchained, eclass
 				local model_endpart ", `mioptions'" // Just mioptions			
 			} 
 		}	
-	
+				
+		*** write out the imputation models for the miDepVars
+		noi di "`miDepVars'"
+		if ("`miDepVars'" ~= "") {
+			_input_parser "`anything'"
+			local iterModels = 1
+			while `"`s(ovar`iterModels')'"' ~= "" {
+				*** parse the syntax of the model
+				_parse_ovar_model "`s(ovar`iterModels')'"
+				noi sreturn list
+				local miCovVar "`s(covs)'"     // covariates
+				local miIncVars "`s(includeVars)'"   // means/sums of scales
+				local miOmitVars "`s(omitVars)'" // omit
+				local miOpts "`s(remaningOpts)'"         // other options
+				
+				*** retrieve the user supplied model
+				_parse_model `"`model'"' "_model"
+				local userModel `"`s(`s(depv)'_model)'"'
+				if (regexm("`userModel'", ",[ ]*") == 0) {
+						local userModel "`userModel', "
+				}	
+				
+				*** collect all periods of the dependent variable
+				unab miDepVar: `s(depv)'*
+				
+				*** collect all covariates for all periods
+
+				if "`miCovVar'" ~= "" {
+					local miCovWide ""
+					foreach var of local miCovVar {
+						fvunab placeholder: `var'*
+						local miCovWide "`miCovWide' `placeholder'"
+					}	
+				}
+				
+				*** collect all omited variables
+				if "`miOmitVars'" ~= "" {
+					local miOmit ""
+					foreach var of local miOmitVars {
+						fvunab placeholder: `var'*
+						local miOmit "`miOmit' `placeholder'"
+					}	
+				}
+				
+				*** if miCovWide are specified, all scalecovs are omitted
+				if ("`miCovWide'" ~= "" ) {
+					local omit "`covars_wide'"
+				}
+				else if ("`miOmit'" ~= "") { // omited vars should be from the scalecovs list
+					local omit "`miOmit'"
+				}
+				*noi di "`miCovWide'" 
+				*noi di "`covars_wide'"
+				
+				*** Build the model for the depvar at every timepoint
+				foreach var of local miDepVar {
+					
+					*** create the imputed variable lists in include
+					if "`miIncVars'" ~= "" {					
+						*** include implies noimputed!!!
+						if !regexm("`miOpts'", "noimputed") {
+							local miOpts "`miOpts' noimputed"
+						}
+					
+						*** retrieve time period of depVar
+						if regexm("`var'","_`timevar'([0-9]+)$") {
+							local timePeriod `=regexs(1)'
+						}
+						*** mean score?
+						if regexm("`miIncVars'","mean\(([a-zA-Z0-9_ ]+)\)") {
+							local meanList `=regexs(1)'
+							_meanSumInclude "`meanList'" "mean" "`timevar'" "`timePeriod'"
+							local meanList "`s(include_items)'"
+						}
+						*** sum score?
+						if regexm("`miIncVars'","sum\(([a-zA-Z0-9_ ]+)\)") {
+							local sumList `=regexs(1)'
+							_meanSumInclude "`meanList'" "sum" "`timevar'" "`timePeriod'"
+							local sumList "`s(include_items)'"
+						}
+					}
+					*** extract the model from user input
+					if (regexm("`userModel'", ",[ ]*") == 0) {
+						local userModel "`userModel', "
+					}
+					
+					*** retrieve the list of omited vars
+					if "`omit'" ~= "" {
+						local omitOpt "omit(`omit')"
+					}
+					
+					*** collect	remaining depVar timepoints
+					local depVarRemaining: list miDepVar - var
+					local updateRemaining ""
+					foreach myVar of local depVarRemaining {
+						local updateRemaining "`updateRemaining' (`myVar')"
+					}
+					
+					if regexm("`miOpts'", "noimputed") {
+						*** create the list of expressions for include
+						local includeOpt "include(`updateRemaining' `miCovWide' `meanList' `sumList')"
+					}
+					else {
+						local includeOpt "include(`miCovWide' `meanList' `sumList')"
+					}
+					
+					*** write the variable model out
+					local mymodel "`mymodel' (`userModel' `miOpts' `includeOpt' `omitOpt') `var' "
+					*noi di "`mymodel'"
+					*exit
+					
+				}
+				local ++iterModels
+				_input_parser "`anything'"
+			}
+		}
+		*noi di "`mymodel'"
+		* exit
+		
 
 		*** Write out the complete model
-		* noi di "`mymodel'"
+
 		local model_full "`mymodel' `model_endpart'"
 		* di "`model_full'"  // useful for debigging
 			
 		*** mi set the data
 		mi set flong
+		
+		*** register all imputed variables
 		foreach scale of local namelist {
 			mi register imputed `scale'*
 		}
-
+		foreach depVar of local miDepVars {
+			mi register imputed `depVar'*
+		}
+		
 		*** mi impute chained
 		noi di _n in y "Performing multiple imputation..."
 		
 		noi mi impute chained `model_full'
 
 		*** reshape to long
-		mi reshape long `allitemsrs' `cov_var', i(`ivar') j(`timevar')
+		mi reshape long `allitemsrs' `miDepVars' `cov_var', i(`ivar') j(`timevar')
 		
 		*** rename vars to original names
-		foreach var of varlist `allitemsrs' {
+		foreach var of varlist `allitemsrs' `miDepVars' {
 			ren `var' `=subinstr("`var'", "_`timevar'","",.)'
 		}
 		
@@ -466,8 +620,8 @@ end
 *** Parser of the user input with multiple arguments of the type
 *** (sc1="logit, augment" sc2="pmm") and variations
 
-capture program drop parse_model
-program define parse_model, sclass
+capture program drop _parse_model
+program define _parse_model, sclass
 
 	args myinput type 
 
@@ -488,3 +642,20 @@ program define parse_model, sclass
 		sreturn local `sname'`type' `model_opts'
 	}
 end
+
+
+*** Compare elements of lists and print elements that differ
+capture program drop compare_lists
+program define compare_lists, sclass
+	args list1 list2
+	
+	local isect: list list1 & list2
+	local union: list list1 | list2
+	local lDiff: list union - isect // LONGER SHOULD BE FIRST!
+	* di "`lDiff'"
+	sreturn local differences `lDiff'
+
+end
+
+
+*** Parses input anything 
