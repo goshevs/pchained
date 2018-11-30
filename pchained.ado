@@ -1,6 +1,6 @@
 * Plumpton with -mi impute chained-
 * Authors: Simo Goshev, Zitong Liu
-* Version: 0.3
+* Version: 0.4
 *
 *
 *
@@ -8,19 +8,21 @@
 *
 *
 *** SYNTAX ***
-*** anything    = unique stub names of the scale(s) to be imputed (takes multiple scales)
-*** Ivar    = cluster identifier (i.e. person, firm, country id)
-*** Timevar     = time/wave identifier
-*** CONTinous   = stub names of scales whose items should be treated as continuous
-*** SCOREtype   = mean score (default) or sum score
-*** SCALECOVars = list of covariates used for scale imputation, supports factor variable syntax 
-*** MIOptions   = mi impute chained options to be passed on (by() is also allowed)
-*** SAVEmidata  = save the mi data; valid path and filename required
-*** CATCutoff   = max number of categories/levels to classify as categorical; if fails --> classified as continuous
-*** MINCsize    = minium cell size required for item to be included in analysis; if fails --> classified as rare
-*** MERGOptions = merge options to be passed on to merge upon merging the imputed data with the original data	
-*** USELabels   = use labels of item/scale if exist to classify items 	
-*** MODel       = user controls the imputation model used for a specific scale
+*** anything     = unique stub names of the scale(s) to be imputed (takes multiple scales)
+*** Ivar         = cluster identifier (i.e. person, firm, country id)
+*** Timevar      = time/wave identifier
+*** CONTinous    = stub names of scales whose items should be treated as continuous
+*** SCOREtype    = mean score (default) or sum score
+*** SCALECOVars  = list of covariates used for scale imputation, supports factor variable syntax 
+*** ADDSADepvars = list of stand-alone varaibles to be imputed together with the scale items
+*** MIOptions    = mi impute chained options to be passed on (by() is also allowed)
+*** CATCutoff    = max number of categories/levels to classify as categorical; if fails --> classified as continuous
+*** MINCsize     = minium cell size required for item to be included in analysis; if fails --> classified as rare
+*** MERGOptions  = merge options to be passed on to merge upon merging the imputed data with the original data	
+*** MODel        = user controls the imputation model used for a specific scale
+*** SAVEmidata   = save the mi data; valid path and filename required
+*** debug        = undocumented option: interrupts execution after reshape
+*** USELabels    = use labels of item/scale if exist to classify items 	(not in use)
 
 ********************************************************************************
 *** Program
@@ -32,10 +34,10 @@ program define pchained, eclass
 
 	syntax anything [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
 						      [CONTinous(namelist) SCOREtype(string asis) ///
-						       SCALECOVars(varlist fv) MIOptions(string asis) ///
-						       SAVEmidata(string) CATCutoff(integer 10) ///
+						       SCALECOVars(varlist fv) ADDSADepvars(varlist) /// 
+							   MIOptions(string asis) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
-							   MODel(string asis) debug] //USELABels
+							   MODel(string asis) SAVEmidata(string) debug] // USELABels
 
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
@@ -365,6 +367,15 @@ program define pchained, eclass
 				
 			} // end of remaining
 
+			*** adding any stand-alone variables to include
+			if ("`addsadepvars'" ~= "") {  // if stand-alone dep variable models are specified
+				foreach sadVar of local addsadepvars {
+					unab sadVars: `sadVar'*   // take all time periods of the var
+					foreach svar of local sadVars {
+						local include_items "`include_items' (`svar')" 
+					}
+				}
+			}
 			* no di "`finalScale'"
 			* no di "`include_items'"
 			
@@ -435,16 +446,16 @@ program define pchained, eclass
 		}	
 				
 		*** write out the imputation models for the miDepVars
-		noi di "`miDepVars'"
+		* noi di "`miDepVars'"
 		if ("`miDepVars'" ~= "") {
 			_input_parser "`anything'"
 			local iterModels = 1
 			while `"`s(ovar`iterModels')'"' ~= "" {
 				*** parse the syntax of the model
 				_parse_ovar_model "`s(ovar`iterModels')'"
-				noi sreturn list
+				* noi sreturn list
 				local miCovVar "`s(covs)'"     // covariates
-				local miIncVars "`s(includeVars)'"   // means/sums of scales
+				local miIncVars "`s(includeVars)'"   // other depVars/means/sums of scales
 				local miOmitVars "`s(omitVars)'" // omit
 				local miOpts "`s(remaningOpts)'"         // other options
 				
@@ -459,7 +470,6 @@ program define pchained, eclass
 				unab miDepVar: `s(depv)'*
 				
 				*** collect all covariates for all periods
-
 				if "`miCovVar'" ~= "" {
 					local miCovWide ""
 					foreach var of local miCovVar {
@@ -500,19 +510,27 @@ program define pchained, eclass
 						*** retrieve time period of depVar
 						if regexm("`var'","_`timevar'([0-9]+)$") {
 							local timePeriod `=regexs(1)'
-						}
+						}					
 						*** mean score?
 						if regexm("`miIncVars'","mean\(([a-zA-Z0-9_ ]+)\)") {
 							local meanList `=regexs(1)'
+							local meanRemove `=regexs(0)'
+							// to replace from period-specific to all periods, replace timePeriod with timelevs
 							_meanSumInclude "`meanList'" "mean" "`timevar'" "`timePeriod'"
 							local meanList "`s(include_items)'"
 						}
 						*** sum score?
 						if regexm("`miIncVars'","sum\(([a-zA-Z0-9_ ]+)\)") {
 							local sumList `=regexs(1)'
-							_meanSumInclude "`meanList'" "sum" "`timevar'" "`timePeriod'"
+							local sumRemove `=regexs(0)'
+							// to replace from period-specific to all periods, replace timePeriod with timelevs
+							_meanSumInclude "`sumList'" "sum" "`timevar'" "`timePeriod'"
 							local sumList "`s(include_items)'"
 						}
+						*** other depVar?
+						local oDepVarList = subinstr("`miIncVars'","`meanRemove'", "", .)
+						local oDepVarList = subinstr("`oDepVarList'","`sumRemove'", "", .)
+						local oDepVarList = stritrim("`oDepVarList'")
 					}
 					*** extract the model from user input
 					if (regexm("`userModel'", ",[ ]*") == 0) {
@@ -531,9 +549,23 @@ program define pchained, eclass
 						local updateRemaining "`updateRemaining' (`myVar')"
 					}
 					
+					*** collect oDepVars
+					* noi di "`oDepVarList'"
+					if "`oDepVarList'" ~= "" {
+						local oDepVars ""
+						foreach mydVar of local oDepVarList {
+							unab myDVList: `mydVar'*
+							* noi di "`myDVList'"
+							foreach mydVarT of local myDVList {
+								local oDepVars "`oDepVars' (`mydVarT')"
+							}
+						}
+					}
+					* noi di "`oDepVars'"
+					
 					if regexm("`miOpts'", "noimputed") {
 						*** create the list of expressions for include
-						local includeOpt "include(`updateRemaining' `miCovWide' `meanList' `sumList')"
+						local includeOpt "include(`updateRemaining' `miCovWide' `meanList' `sumList' `oDepVars')"
 					}
 					else {
 						local includeOpt "include(`miCovWide' `meanList' `sumList')"
@@ -659,3 +691,121 @@ end
 
 
 *** Parses input anything 
+capture program drop _input_parser
+program define _input_parser, sclass
+
+	args input_string
+	
+	sreturn clear
+	
+	local regex_scale "^[a-zA-Z0-9_ ]+"
+	local model_exp "([a-zA-Z0-9_]+[a-zA-Z0-9_. ]*[ ]?)"
+	local opts_exp "(,[ ]*([a-zA-Z]+([ ]|\(([a-zA-Z0-9_. ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+\)[ ]?|))+)?"
+		
+	local regex_model "`model_exp'`opts_exp'"
+	
+	if regexm(`"`input_string'"', `"`regex_scale'"') {
+		local namelist `= regexs(0)'
+		local input_string = trim(subinstr(`"`input_string'"', `"`namelist'"', "", 1))
+		
+		sreturn local namelist "`namelist'"
+	}
+	
+	local count = 1
+	while regexm(`"`input_string'"', `"`regex_model'"') {
+		local expression `= regexs(0)'
+		local input_string = trim(subinstr(`"`input_string'"', `"(`expression')"', "", .))
+		sreturn local ovar`count' `=regexs(0)'
+		local ++count
+		
+	}
+end
+
+*** Parser of sadv_models
+capture program drop _parse_ovar_model
+program define _parse_ovar_model, sclass
+	
+	args model
+		
+	gettoken eq opts: model, parse(",")
+	local ovar `:word 1 of `eq''
+	local ovar = trim("`ovar'")
+	
+	gettoken left covs: eq
+	local covs = trim("`covs'")
+	
+	gettoken right opts: opts, parse(",")
+	local opts = trim("`opts'")
+	
+	if regexm("`opts'", "omit\(([a-zA-Z0-9_. ]+)\)") {
+		local omitOpt `=regexs(0)'
+		local omitVars `=regexs(1)'
+	}
+	
+	if regexm("`opts'", "include\((([a-zA-Z0-9_. ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+)\)") {
+		local includeOpt `=regexs(0)'
+		local includeVars `=regexs(1)'
+	}
+	
+	local remaningOpts = trim(subinstr("`opts'", "`includeOpt'","", .))
+	local remaningOpts = trim(subinstr("`remaningOpts'", "`omitOpt'","", .))
+		
+	* noi di "`omitOpt'"
+	* noi di "`includeOpt'"
+	
+	sreturn local depv "`ovar'"
+	sreturn local covs "`covs'"
+	sreturn local opts "`opts'"
+	sreturn local includeVars "`includeVars'"
+	sreturn local omitVars "`omitVars'"
+	sreturn local remaningOpts "`remaningOpts'"
+	
+	
+	* noi di "`includeVars'"
+	* noi di "`ovar'"
+	* noi di "`covs'"
+	* noi di "`opts'"
+	
+end
+
+
+*** Creates the mean/sum score syntax for include()
+capture program drop _meanSumInclude
+program define _meanSumInclude, sclass
+
+	args mylist scoretype timevar timelevs
+
+	local include_items ""
+	
+	* noi di "`mylist'"
+	* noi di "`timelevs'"
+	
+	foreach scale of local mylist {
+		unab myitems: `scale'*
+		* noi di "`myitems'"
+		foreach tlev of local timelevs {
+			local taggregs ""
+			foreach item of local myitems {	
+				if regexm("`item'", "^`scale'[a-z0-9]*_`timevar'`tlev'$") {
+					local taggregs "`taggregs' `=regexs(0)'"
+				}
+			}
+			* noi di "`taggregs'"	
+			*** This is where we write out the functions
+			local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
+			if "`scoretype'" == "sum" {
+				local include_items "`include_items' (`mysum')"
+			}	
+			else if "`scoretype'" == "mean" {
+				local nitems: word count `taggregs'	
+				local include_items "`include_items' (`mysum'/`nitems')"
+			}
+			else {
+				di in r "`scoretype' is not allowed as a score type"
+				exit 198
+			}
+		}
+	}
+	
+	sreturn local include_items "`include_items'"
+end

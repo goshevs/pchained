@@ -48,7 +48,7 @@ program define simdata
 		** Time-variant categorical var
 		bys id: gen x3 = round(1 + 3*runiform() + ih) if _n ==1
 		bys id: replace x3 = cond(x3[1] < 0, 0, x3[1])
-		bys id: replace x3 = cond(runiform() > 0.3, x3[_n -1] + 1, x3[_n-1]) if _n > 1 
+		bys id: replace x3 = cond(runiform() > 0.5, x3[_n -1] + 1, x3[_n-1]) if _n > 1 
 
 
 		bys id: gen x4 = round(1 + 3*runiform() + ih) if _n ==1
@@ -57,19 +57,12 @@ program define simdata
 
 		
 		** Generate ovars and covars
-		bys id: gen y2 = round(1 + 6*runiform() + ih) if _n ==1
-		bys id: replace y2 = cond(y2[1] < 0, 0, y2[1])
-		bys id: replace y2 = y2[1] if _n > 1
+		bys id: gen y2 = abs(rnormal())
 
-		bys id: gen y3 = round(5 + 5 * runiform()) if _n == 1
-		bys id: replace y3 = y3[_n -1] + 1 if _n > 1
+		bys id: gen y3 =  round(rnormal())
 		
-		bys id: gen yx = round(5 + 5 * runiform()) if _n == 1
-		bys id: replace yx = yx[_n -1] + 1 if _n > 1
-		
-		bys id: gen yz = round(5 + 5 * runiform()) if _n == 1
-		bys id: replace yz = yz[_n -1] + 1 if _n > 1
-		
+		bys id: gen yx = round(runiform())
+		bys id: gen yz = round(0 + 3 * runiform())
 				
 		** Scale 1:
 		forval i = 1/3 {

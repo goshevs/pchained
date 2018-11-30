@@ -19,7 +19,7 @@ Installation
 To load `pchained`, include the following line in your do file:
 
 ```
-do "https://raw.githubusercontent.com/goshevs/pchained-github/master/pchained.ado"
+qui do "https://raw.githubusercontent.com/goshevs/pchained-github/devel-ef/pchained.ado"
 ```
 
 
@@ -27,49 +27,78 @@ Syntax
 ---
 
 ```
-pchained namelist [if] [in] [weight], Ivar(varlist) Timevar(varname)
-					   [CONTinous(namelist) SCOREtype(string)
-					    COVars(varlist fv) MIOptions(string) 
-					    SAVEmidata(string) CATCutoff(integer)
-					    MINCsize(integer)  MERGOptions(string) MODel(string)]
+pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(varname)
+					   [CONTinous(namelist) SCOREtype(string asis) ///
+						SCALECOVars(varlist fv) ADDSADepvars(varlist) /// 
+						MIOptions(string asis) CATCutoff(integer 10) ///
+						MINCsize(integer 0) MERGOptions(string asis) ///
+						MODel(string asis) SAVEmidata(string)]
 ```
 <br>
 
-**Required inputs**
+`pchained` takes the following arguments:
 
+**Required**
 
-| input       | description            |
-|-------------|------------------------|
-| *namelist*  | unique stub names of the scale(s) to be imputed (takes multiple scales) |
-| *Ivar*      | unique cluster/panel identifier (i.e. person, firm, country id) |
-| *Timevar*   | time/wave identifier |
+| argument       | description            |
+|----------------|------------------------|
+| *scale_stubs*  | unique stub names of the scale(s) to be imputed (takes multiple scales) |
+| *Ivar*         | unique cluster/panel identifier (i.e. person, firm, country id) |
+| *Timevar*      | time/wave identifier |
 
 <br>
 
-**Options available to the user**
+**Options and conditionally required arguments:**
 
-
-| option         | description            |
+| argument       | description            |
 |----------------|------------------------|
+| *sadv_models*  | models for stand-alone variables to be imputed; see below for specific syntax|
 | *CONTinous*    | stub names of scales whose items should be treated as continuous |
 | *SCOREtype*    | mean score or sum score |
 |                | default: `mean`
-| *COVars*       | list of covariates, supports factor variable syntax  |
+| *SCALECOVars*  | list of covariates to be included in the scale item imputatation models, supports factor variable syntax  |
+| *ADDSADepvars* | list of stand-alone variables to be included in the scale item imputation equations |
 | *MIOptions*    | `mi impute chained` options to be passed on (`by()` is also allowed) |
-| *SAVEmidata*   | save the mi data; valid path and filename required |
 | *CATCutoff*    | maximum number of categories/levels to classify as categorical; if higher --> classified as continuous |
 |                | default: `10` |
 | *MINCsize*     | minimum cell size required for item to be included in analysis; if lower --> classified as rare |
 |                | default: `0` |
 | *MERGOptions*  | merge options to be passed on to `merge` upon merging the imputed data with the original data; imputed dataset is *master*, original dataset is *using* |
 |                | default: `keep(match)` |
-| *MODel*        | user can pass a model and options to `mi impute chained` for each imputed scale |
+| *MODel*        | user can pass a model and options to `mi impute chained` for each imputed scale and stand-alone variable; this is a conditionally required argument; see below for details |
+| *SAVEmidata*   | save the mi data; valid path and filename required |
 
 <br>
 
 `fweight`, `aweight`, `pweight` and `iweight` are allowed. However, different `mi impute chained` models may 
 impose restrictions. Please, see the help file of `mi impute chained` for further guidance.
 
+
+
+`pchained` could be used for imputing scale items only or for scale items and stand-alone variables, 
+dependently or independently of each other. To impute stand-alone variables together with the scale items, 
+`sadv_models` should be specified as:
+
+`(depvar [covariateList][, options])`
+
+
+where:
+
+- `depvar` is the stand-alone variable to be imputed
+- `covariateList` is an optional list of covariates to be included in the imputation equation of `depvar'
+- `options` could be one of:
+    - `include([other_sadv] [mean(scale_stubs)] [sum(scale_stubs)])`: allows 
+	the user to specify other stand-alone variables , `other_sadv`, to be included in the 
+	imputation equation as well as the type of scale scores of the imputed scales they 
+	wish to be included; if `include` is specified, option `noimputed` is assumed
+	- `omit(varlist)`: allows the user to remove covariates listed in `SCALECOVars` from the imputation equation
+	- `noimputed`: instructs Stata to remove all imputed variables except the ones specified in `include' as 
+	predictors in the imputation equation
+	- other options specific to the imputation model
+
+If `sadv_models` is specified, option `MODel` becomes required for all stand-alone variables. 
+
+<br>
 
 Working with sensitive data?
 ---
@@ -88,32 +117,33 @@ Examples
 
 *** Categorical items
 simdata 500 3
-pchained s1_i, i(id) t(time) cov(x1 i.x2 x3 y) mio(add(1) chaindots rseed(123456))
+pchained s1_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 *** Treat items as continuous
 simdata 200 3
-pchained s1_i, i(id) t(time) cont(s1_i) cov(x1 i.x2 x3 y) mio(add(1) chaindots rseed(123456))
+pchained s1_i, i(id) t(time) cont(s1_i) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 *** Items continuous by design (imputation model defined by user)
 simdata 200 3
-pchained s4_i, i(id) t(time) cov(x1 i.x2 x3 y) mio(add(1) chaindots rseed(123456)) mod(s4_i = "pmm, knn(3)")
+pchained s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) /// 
+               mod(s4_i = "pmm, knn(3)")
 
 
 *******************
 *** Two scales  ***
 
 *** Categorical items
-simdata 200 3
-pchained s1_i s3_i, i(id) t(time) cov(x1 i.x2 x3 y) score("sum") mio(add(1) chaindots rseed(123456))
+simdata 500 3
+pchained s1_i s3_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
 
 
 *** Treat some scales as continuous
 simdata 500 3
-pchained s1_i s2_i, i(id) t(time) cont(s2_i) cov(x1 i.x2 x3 y) mio(add(1) chaindots rseed(123456))
+pchained s1_i s2_i, i(id) t(time) cont(s2_i) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 *** Some scales/items continuous by design (imputation models defined by user)
-simdata 200 3
-pchained s2_i s4_i, i(id) t(time) cov(x1 i.x2 x3 y) mio(add(1) chaindots rseed(123456)) /// 
+simdata 500 3
+pchained s2_i s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) ///
                     mod(s2_i = "ologit" s4_i = "pmm, knn(3)")
 
 
@@ -121,41 +151,59 @@ pchained s2_i s4_i, i(id) t(time) cov(x1 i.x2 x3 y) mio(add(1) chaindots rseed(1
 *** Three scales ***
 
 *** Categorical items
-simdata 200 3
-pchained s1_i s2_i s3_i, i(id) t(time) cov(x1 i.x2 x3 y) score(mean) mio(add(1) chaindots rseed(123456))
+simdata 500 3
+pchained s1_i s2_i s3_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
 
 
 *** Treat some scales as continuous
-simdata 200 3
-pchained s1_i s2_i s3_i, i(id) t(time) cont(s2_i) cov(x1 i.x2 x3 y) score(mean) /// 
-                         mio(add(1) chaindots rseed(123456))
+simdata 500 3
+pchained s1_i s2_i s3_i, i(id) t(time) cont(s2_i) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 
 *** Some scales/items continuous by design
-simdata 200 3
-pchained s1_i s3_i s4_i, i(id) t(time) cov(x1 i.x2 x3 y) score(mean) mio(add(1) chaindots)
+simdata 500 3
+pchained s1_i s3_i s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots)
 
 
 *** Mixed, s4_i by design is cont, s2_i user defined as cont
-simdata 200 3
-pchained s1_i s2_i s4_i, i(id) t(time) cont(s2_i) cov(x1 i.x2 x3 y) score(mean) ///
-                         mio(add(1) chaindots rseed(123456))
-
+simdata 500 3
+pchained s1_i s2_i s4_i, i(id) t(time) cont(s2_i) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 
 ********************
 ***   By group   ***
 
 simdata 1000 3
-pchained s1_i s4_i, i(id) t(time) cov(x1 i.x2 x3 y) score(sum) ///
-                    mio(add(1) chaindots by(group) rseed(123456))
+pchained s1_i s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots by(group) rseed(123456))
 
-					
-					
+
 *************************
-***  Sampling weight  ***
+***  Sampling Weight  ***
 
+simdata 1000 3
+pchained s1_i s4_i [pw=weight], i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
+
+
+****************************************************************
+***  Imputing non-scale variables together with scale items  ***
+
+*** 
 simdata 500 3
-pchained s1_i s4_i [pw=weight], i(id) t(time) cov(x1 i.x2 x3 y) score(sum) mio(add(1) chaindots rseed(123456))
+pchained s1_i (y2, noimputed) (y3 i.yx x1 i.yz, include(y2 mean(s1_i))), ///
+	          i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) ///
+			  mod(s1_i = "pmm, knn(3)" y2 = "regress" y3 = "regress")
+
+*** 		  
+simdata 500 3
+pchained s1_i (y2, include(y1 mean(s1_i)) omit(x1 i.x2)) (y3 i.yx x1 i.yz, include(y2 mean(s1_i))), ///
+	          i(id) t(time) scalecov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
+			  mod(y2 = "pmm, knn(3)" y3 = "regress")
+
+***
+simdata 500 3
+pchained s1_i s2_i (y2, include(y1 mean(s1_i) sum(s2_i)) omit(x1 i.x2 y1)) (y3 i.yx x1 i.yz, include(y2 mean(s2_i))), ///
+	          i(id) t(time) scalecov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
+			  mod(y2 = "pmm, knn(3)" y3 = "regress")
+
 
 ```
