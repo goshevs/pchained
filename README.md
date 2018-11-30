@@ -94,20 +94,20 @@ The arguments that a model in `sadv_models` takes are:
 
 - `depvar`: the stand-alone variable to be imputed
 - `covariateList`: an optional list of covariates to be included in the imputation equation of `depvar`. If 
-`covariateList` is specified, `SCALECOVars' are excluded from the imputation model for `depvar`. 
+`covariateList` is specified, `SCALECOVars` are excluded from the imputation model for `depvar`. 
 - `options`: could be any set of:
     - `include([other_sadv] [mean(scale_stubs)] [sum(scale_stubs)])`: allows 
 	the user to specify other stand-alone variables, `other_sadv`, as well as the types 
 	of scale scores of the scales being imputed to be used as predictors in the 
 	imputation model for `depvar`; if `include` is specified, option `noimputed` is assumed.
-	If `other_sadv' is specified, all periods of the stand-alone variables in `other_sadv` are used as
+	If `other_sadv` is specified, all periods of the stand-alone variables in `other_sadv` are used as
 	predictors in the imputation equation. If `mean` or `sum` is specified, the score for the
 	time period corresponding to the time period of `depvar` is included. 
 	- `omit(varlist)`: allows the user to remove covariates listed in `SCALECOVars` 
 	from the imputation equation for `depvar`; this options is ignored if `include' is specified
 	- `noimputed`: instructs Stata to remove all other imputed variables used as 
 	predictors in the imputation equation, except other time periods of `depvar` and 
-	variables specified in `include' 
+	variables specified in `include` 
 	- other options specific to the imputation model
 
 If `sadv_models` is specified, option `MODel` is required for all stand-alone variables. 
