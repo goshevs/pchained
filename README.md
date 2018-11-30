@@ -78,14 +78,17 @@ impose restrictions. Please, see the help file of `mi impute chained` for furthe
 **Syntax for stand-alone variables**
 
 `pchained` could be used for imputing scale items only or for scale items and stand-alone variables, 
-dependently or independently of each other. To impute stand-alone variables together with the scale items, 
-`sadv_models` should be specified as:
+dependently or independently of each other. A stand-alone variable model has the following general format:
 
 `(depvar [covariateList][, options])`
+
+<br>
 
 Multiple `sadv_models` could be specified using the following syntax:
 
 `(depvar1 [covariateList1][, options1])[(depvar2 [covariateList2][, options2]) ...]`
+
+<br>
 
 The arguments that a model in `sadv_models` takes are:
 
