@@ -102,9 +102,9 @@ The arguments that a model in `sadv_models` takes are:
 	imputation model for `depvar`; if `include` is specified, option `noimputed` is assumed.
 	If `other_sadv` is specified, all periods of the stand-alone variables in `other_sadv` are used as
 	predictors in the imputation equation. If `mean` or `sum` is specified, the score for the
-	time period corresponding to the time period of `depvar` is included as a regressor. 
+	time period corresponding to the time period of `depvar` is included as a regressor 
 	- `omit(varlist)`: allows the user to remove covariates listed in `SCALECOVars` 
-	from the imputation equation for `depvar`; this options is ignored if `include' is specified
+	from the imputation equation for `depvar`; this options is ignored if `include` is specified
 	- `noimputed`: instructs Stata to remove all other imputed variables used as 
 	predictors in the imputation equation, except other time periods of `depvar` and 
 	variables specified in `include` 
