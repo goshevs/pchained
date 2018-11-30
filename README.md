@@ -48,7 +48,7 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 
 <br>
 
-**Options and conditionally required arguments:**
+**Optional and conditionally required arguments:**
 
 | argument       | description            |
 |----------------|------------------------|
