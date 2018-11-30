@@ -81,7 +81,7 @@ impose restrictions. Please, see the help file of `mi impute chained` for furthe
 dependently or independently of each other. To impute stand-alone variables together with the scale items, 
 `sadv_models` should be specified as:
 
-`(depvar [covariateList][, options])`
+`(depvar [covariateList][, options])[(depvar [covariateList][, options]) ...]`
 
 
 where:
