@@ -85,18 +85,21 @@ dependently or independently of each other. To impute stand-alone variables toge
 where:
 
 - `depvar` is the stand-alone variable to be imputed
-- `covariateList` is an optional list of covariates to be included in the imputation equation of `depvar'
-- `options` could be one of:
+- `covariateList` is an optional list of covariates to be included in the imputation equation of `depvar`. If 
+`covariateList` is specified, `SCALECOVars' are excluded from the imputation model for `depvar`
+- `options` could be any set of:
     - `include([other_sadv] [mean(scale_stubs)] [sum(scale_stubs)])`: allows 
-	the user to specify other stand-alone variables , `other_sadv`, to be included in the 
-	imputation equation as well as the type of scale scores of the imputed scales they 
-	wish to be included; if `include` is specified, option `noimputed` is assumed
-	- `omit(varlist)`: allows the user to remove covariates listed in `SCALECOVars` from the imputation equation
-	- `noimputed`: instructs Stata to remove all imputed variables except the ones specified in `include' as 
-	predictors in the imputation equation
+	the user to specify other stand-alone variables, `other_sadv`, as well as the types 
+	of scale scores of the scales being imputed to be used as predictors in the 
+	imputation model for `depvar`; if `include` is specified, option `noimputed` is assumed
+	- `omit(varlist)`: allows the user to remove covariates listed in `SCALECOVars` 
+	from the imputation equation for `depvar`; this options is ignored if `include' is specified
+	- `noimputed`: instructs Stata to remove all other imputed variables used as 
+	predictors in the imputation equation, except other time periods of `depvar` and 
+	variables specified in `include' 
 	- other options specific to the imputation model
 
-If `sadv_models` is specified, option `MODel` becomes required for all stand-alone variables. 
+If `sadv_models` is specified, option `MODel` is required for all stand-alone variables. 
 
 <br>
 
@@ -107,6 +110,7 @@ If you are working with sensitive data, please ensure that you point Stata to a 
 directory that it can use as a temporary directory. Please, see [this](https://www.stata.com/support/faqs/data-management/statatmp-environment-variable/) reference for 
 instructions on how to do this.
 
+<br>
 
 Examples
 ---
