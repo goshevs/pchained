@@ -57,7 +57,7 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 | *SCOREtype*    | mean score or sum score |
 |                | default: `mean`
 | *SCALECOVars*  | list of covariates to be included in the scale item imputatation models, supports factor variable syntax  |
-| *ADDSADepvars* | list of stand-alone variables to be included in the scale item imputation equations |
+| *ADDSADepvars* | list of stand-alone variables to be included in the scale item imputation equations; all periods of these variables are used in the imputation equation for an item |
 | *MIOptions*    | `mi impute chained` options to be passed on (`by()` is also allowed) |
 | *CATCutoff*    | maximum number of categories/levels to classify as categorical; if higher --> classified as continuous |
 |                | default: `10` |
@@ -91,7 +91,10 @@ where:
     - `include([other_sadv] [mean(scale_stubs)] [sum(scale_stubs)])`: allows 
 	the user to specify other stand-alone variables, `other_sadv`, as well as the types 
 	of scale scores of the scales being imputed to be used as predictors in the 
-	imputation model for `depvar`; if `include` is specified, option `noimputed` is assumed
+	imputation model for `depvar`; if `include` is specified, option `noimputed` is assumed.
+	If `other_sadv' is specified, all periods of the stand-alone variables in `other_sadv` are used as
+	predictors in the imputation equation. If `mean` or `sum` is specified, the score for the
+	time period corresponding to the time period of `depvar` is included. 
 	- `omit(varlist)`: allows the user to remove covariates listed in `SCALECOVars` 
 	from the imputation equation for `depvar`; this options is ignored if `include' is specified
 	- `noimputed`: instructs Stata to remove all other imputed variables used as 
@@ -199,13 +202,13 @@ pchained s1_i (y2, noimputed) (y3 i.yx x1 i.yz, include(y2 mean(s1_i))), ///
 
 *** 		  
 simdata 500 3
-pchained s1_i (y2, include(y1 mean(s1_i)) omit(x1 i.x2)) (y3 i.yx x1 i.yz, include(y2 mean(s1_i))), ///
+pchained s1_i (y2, include(y3 mean(s1_i)) omit(x1 i.x2)) (y3 i.yx x1 i.yz, include(y2 mean(s1_i))), ///
 	          i(id) t(time) scalecov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
 			  mod(y2 = "pmm, knn(3)" y3 = "regress")
 
 ***
 simdata 500 3
-pchained s1_i s2_i (y2, include(y1 mean(s1_i) sum(s2_i)) omit(x1 i.x2 y1)) (y3 i.yx x1 i.yz, include(y2 mean(s2_i))), ///
+pchained s1_i s2_i (y2, include(y3 mean(s1_i) sum(s2_i)) omit(x1 i.x2 y1)) (y3 i.yx x1 i.yz, include(y2 mean(s2_i))), ///
 	          i(id) t(time) scalecov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
 			  mod(y2 = "pmm, knn(3)" y3 = "regress")
 
