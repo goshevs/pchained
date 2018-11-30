@@ -81,14 +81,17 @@ impose restrictions. Please, see the help file of `mi impute chained` for furthe
 dependently or independently of each other. To impute stand-alone variables together with the scale items, 
 `sadv_models` should be specified as:
 
-`(depvar [covariateList][, options])[(depvar [covariateList][, options]) ...]`
+`(depvar [covariateList][, options])`
 
+Multiple `sadv_models` could be specified using the following syntax:
 
-where:
+`(depvar1 [covariateList1][, options1])[(depvar2 [covariateList2][, options2]) ...]`
+
+The arguments that a model in `sadv_models` takes are:
 
 - `depvar` is the stand-alone variable to be imputed
 - `covariateList` is an optional list of covariates to be included in the imputation equation of `depvar`. If 
-`covariateList` is specified, `SCALECOVars' are excluded from the imputation model for `depvar`
+`covariateList` is specified, `SCALECOVars' are excluded from the imputation model for `depvar`. 
 - `options` could be any set of:
     - `include([other_sadv] [mean(scale_stubs)] [sum(scale_stubs)])`: allows 
 	the user to specify other stand-alone variables, `other_sadv`, as well as the types 
