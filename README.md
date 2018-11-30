@@ -73,7 +73,7 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 `fweight`, `aweight`, `pweight` and `iweight` are allowed. However, different `mi impute chained` models may 
 impose restrictions. Please, see the help file of `mi impute chained` for further guidance.
 
-
+<br>
 
 `pchained` could be used for imputing scale items only or for scale items and stand-alone variables, 
 dependently or independently of each other. To impute stand-alone variables together with the scale items, 
