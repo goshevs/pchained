@@ -92,10 +92,10 @@ Multiple `sadv_models` could be specified using the following syntax:
 
 The arguments that a model in `sadv_models` takes are:
 
-- `depvar` is the stand-alone variable to be imputed
-- `covariateList` is an optional list of covariates to be included in the imputation equation of `depvar`. If 
+- `depvar`: the stand-alone variable to be imputed
+- `covariateList`: an optional list of covariates to be included in the imputation equation of `depvar`. If 
 `covariateList` is specified, `SCALECOVars' are excluded from the imputation model for `depvar`. 
-- `options` could be any set of:
+- `options`: could be any set of:
     - `include([other_sadv] [mean(scale_stubs)] [sum(scale_stubs)])`: allows 
 	the user to specify other stand-alone variables, `other_sadv`, as well as the types 
 	of scale scores of the scales being imputed to be used as predictors in the 
