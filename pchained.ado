@@ -343,11 +343,11 @@ program define pchained, eclass
 					foreach tlev of local timelevs {
 						local taggregs ""
 						foreach item of local myitems {	
-							if regexm("`item'", "^`remscale'[a-z0-9]*_`timevar'`tlev'$") {
+							if regexm("`item'", "^`remscale'[a-z0-9_]*_`timevar'`tlev'$") {
 								local taggregs "`taggregs' `=regexs(0)'"
 							}
 						}
-						* noi di "`taggregs'"	
+						* noi di "`taggregs'"
 						*** This is where we write out the functions
 						local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
 						if "`scoretype'" == "sum" {
@@ -448,6 +448,11 @@ program define pchained, eclass
 		*** write out the imputation models for the miDepVars
 		* noi di "`miDepVars'"
 		if ("`miDepVars'" ~= "") {
+			noi di _n "********************************************************" _n ///
+			"Stand-alone dependent variables included in the imputation model:" _n ///
+			"      `miDepVarsOriginal'" 
+			noi di "********************************************************" _n ///
+			
 			_input_parser "`anything'"
 			local iterModels = 1
 			while `"`s(ovar`iterModels')'"' ~= "" {
@@ -516,7 +521,7 @@ program define pchained, eclass
 							local meanList `=regexs(1)'
 							local meanRemove `=regexs(0)'
 							// to replace from period-specific to all periods, replace timePeriod with timelevs
-							_meanSumInclude "`meanList'" "mean" "`timevar'" "`timePeriod'"
+							_meanSumInclude "`meanList'" "mean" "`timevar'" "`timelevs'"
 							local meanList "`s(include_items)'"
 						}
 						*** sum score?
@@ -524,7 +529,7 @@ program define pchained, eclass
 							local sumList `=regexs(1)'
 							local sumRemove `=regexs(0)'
 							// to replace from period-specific to all periods, replace timePeriod with timelevs
-							_meanSumInclude "`sumList'" "sum" "`timevar'" "`timePeriod'"
+							_meanSumInclude "`sumList'" "sum" "`timevar'" "`timelevs'"
 							local sumList "`s(include_items)'"
 						}
 						*** other depVar?
@@ -786,7 +791,7 @@ program define _meanSumInclude, sclass
 		foreach tlev of local timelevs {
 			local taggregs ""
 			foreach item of local myitems {	
-				if regexm("`item'", "^`scale'[a-z0-9]*_`timevar'`tlev'$") {
+				if regexm("`item'", "^`scale'[a-z0-9_]*_`timevar'`tlev'$") {
 					local taggregs "`taggregs' `=regexs(0)'"
 				}
 			}
