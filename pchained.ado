@@ -41,39 +41,44 @@ program define pchained, eclass
 
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
-	
-	*** Parse the anything string
-	_input_parser "`anything'"
-	
-	*** collect scale stub names
-	local namelist "`s(namelist)'" 
-	
-	*** collect variables that require imputation, their covariates and included vars
-	local extraModels = 1
-	local miDepVarsOriginal ""
-	local miCovVars ""
-	while `"`s(ovar`extraModels')'"' ~= "" {
-		_parse_ovar_model "`s(ovar`extraModels')'"
-		* noi sreturn list
-		local miDepVarsOriginal "`miDepVarsOriginal' `s(depv)'"
-		local miCovVars "`miCovVars' `s(covs)'"
-		local ++extraModels
-	}
-	
-	*** rename depVars
-	local miDepVars ""
-	foreach dVar of local miDepVarsOriginal {
-		local miDepVars "`miDepVars' `dVar'_`timevar'" // may break if too many items
-		ren `dVar' `dVar'_`timevar'
-	}
-			
-	* noi di "`miDepVars'"
-	* noi di "`miCovVars'"
-	
-	marksample touse
-	
 	qui {
-
+				
+		*** Save original data
+		tempfile originaldata
+		save "`originaldata'", replace
+		
+		*** limit sample to user specified
+		marksample touse
+		drop if !`touse' 
+		
+		*** Parse the anything string
+		_input_parser "`anything'"
+		
+		*** collect scale stub names
+		local namelist "`s(namelist)'" 
+		
+		*** collect variables that require imputation, their covariates and included vars
+		local extraModels = 1
+		local miDepVarsOriginal ""
+		local miCovVars ""
+		while `"`s(ovar`extraModels')'"' ~= "" {
+			_parse_ovar_model "`s(ovar`extraModels')'"
+			* noi sreturn list
+			local miDepVarsOriginal "`miDepVarsOriginal' `s(depv)'"
+			local miCovVars "`miCovVars' `s(covs)'"
+			local ++extraModels
+		}
+		
+		*** rename depVars
+		local miDepVars ""
+		foreach dVar of local miDepVarsOriginal {
+			local miDepVars "`miDepVars' `dVar'_`timevar'" // may break if too many items
+			ren `dVar' `dVar'_`timevar'
+		}
+				
+		* noi di "`miDepVars'"
+		* noi di "`miCovVars'"
+		
 		**** Specification of default values
 		*** Default scoretype to mean
 		if "`scoretype'" == "" local scoretype "mean"
@@ -96,15 +101,8 @@ program define pchained, eclass
 		else {
 			local mergoptions ", `mergoptions'"
 		}
-		
-		*** Save original data
-		tempfile originaldata
-		save "`originaldata'", replace
-		
-		drop if !`touse' // limit sample to user specified
-		* preserve
-				
-		
+
+	
 		*** Collect all items of all scales for reshape
 		local allitemsrs ""  // collection of all items (renamed for reshape)
 		foreach scale of local namelist {  // loop over scales
@@ -615,7 +613,9 @@ program define pchained, eclass
 		mi reshape long `allitemsrs' `miDepVars' `cov_var', i(`ivar') j(`timevar')
 		
 		*** rename vars to original names
-		foreach var of varlist `allitemsrs' `miDepVars' {
+		noi di "`miDepVars'"
+		noi di "`allitemsrs' `miDepVars'"
+		foreach var of varlist `allitemsrs' `miDepVars'  {
 			ren `var' `=subinstr("`var'", "_`timevar'","",.)'
 		}
 		
