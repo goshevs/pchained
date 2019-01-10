@@ -368,7 +368,7 @@ program define pchained, eclass
 			*** adding any stand-alone variables to include
 			if ("`addsadepvars'" ~= "") {  // if stand-alone dep variable models are specified
 				foreach sadVar of local addsadepvars {
-					unab sadVars: `sadVar'*   // take all time periods of the var
+					unab sadVars: `sadVar'_`timevar'*   // take all time periods of the var
 					foreach svar of local sadVars {
 						local include_items "`include_items' (`svar')" 
 					}
@@ -376,6 +376,8 @@ program define pchained, eclass
 			}
 			* no di "`finalScale'"
 			* no di "`include_items'"
+			* exit
+			
 			
 			*** write out the imputation models for the scales
 			foreach depvar of local finalScale {
@@ -445,6 +447,8 @@ program define pchained, eclass
 				
 		*** write out the imputation models for the miDepVars
 		* noi di "`miDepVars'"
+		* exit
+		
 		if ("`miDepVars'" ~= "") {
 			noi di _n "********************************************************" _n ///
 			"Stand-alone dependent variables included in the imputation model:" _n ///
@@ -470,7 +474,9 @@ program define pchained, eclass
 				}	
 				
 				*** collect all periods of the dependent variable
-				unab miDepVar: `s(depv)'*
+				unab miDepVar: `s(depv)'_`timevar'*
+				
+				* noi di "`miDepVar'"
 				
 				*** collect all covariates for all periods
 				if "`miCovVar'" ~= "" {
@@ -554,18 +560,22 @@ program define pchained, eclass
 					
 					*** collect oDepVars
 					* noi di "`oDepVarList'"
-					if "`oDepVarList'" ~= "" {
+					
+					if "`oDepVarList'" ~= "" {  // this is from include()
 						local oDepVars ""
 						foreach mydVar of local oDepVarList {
-							unab myDVList: `mydVar'*
+							unab myDVList: `mydVar'_`timevar'*
 							* noi di "`myDVList'"
 							foreach mydVarT of local myDVList {
 								local oDepVars "`oDepVars' (`mydVarT')"
 							}
 						}
 					}
+					* noi di "`updateRemaining'"
 					* noi di "`oDepVars'"
+					* noi di "`miOpts'"
 					
+					*** Review this!!
 					if regexm("`miOpts'", "noimputed") {
 						*** create the list of expressions for include
 						local includeOpt "include(`updateRemaining' `miCovWide' `meanList' `sumList' `oDepVars')"
@@ -576,7 +586,7 @@ program define pchained, eclass
 					
 					*** write the variable model out
 					local mymodel "`mymodel' (`userModel' `miOpts' `includeOpt' `omitOpt') `var' "
-					*noi di "`mymodel'"
+					* noi di "`mymodel'"
 					*exit
 					
 				}
@@ -584,7 +594,7 @@ program define pchained, eclass
 				_input_parser "`anything'"
 			}
 		}
-		*noi di "`mymodel'"
+		* noi di "`mymodel'"
 		* exit
 		
 
