@@ -17,7 +17,7 @@ set more off
 
 *** Categorical items
 simdata 500 3
-pchained s1_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained s1_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) print
 
 *** Treat items as continuous
 simdata 200 3
@@ -107,8 +107,8 @@ pchained s1_i s2_i (y2, include(y3 mean(s1_i) sum(s2_i)) omit(x1 i.x2 y1)) (y3 i
 			  mod(y2 = "pmm, knn(3)" y3 = "regress")
 
 
-
-
+	  
+			  
 *** Generate aggregates off of imputed vars
 *mi xeq: egen s1_sum = rowtotal(s1*)
 *mi xeq: egen s1_mean = rowmean(s1*)
