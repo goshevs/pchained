@@ -21,6 +21,7 @@
 *** MERGOptions  = merge options to be passed on to merge upon merging the imputed data with the original data	
 *** MODel        = user controls the imputation model used for a specific scale
 *** SAVEmidata   = save the mi data; valid path and filename required
+*** PRINTmodel   = prints the imputation model
 *** debug        = undocumented option: interrupts execution after reshape
 *** USELabels    = use labels of item/scale if exist to classify items 	(not in use)
 
@@ -38,7 +39,7 @@ program define pchained, eclass
 							   MIOptions(string asis) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
 							   MODel(string asis) SAVEmidata(string) debug ///
-							   PRINTmodel] // USELABels
+							   PRINTmodel suspend] // USELABels
 
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
@@ -607,7 +608,12 @@ program define pchained, eclass
 		if "`printmodel'" ~= "" {
 			
 			noi di _n in y "Printing the full imputation model..."
-			noi di _n "`model_full'"  
+			noi di _n "`model_full'" 
+			
+			if "`suspend'" ~= "" {
+				noi di _n in y "Suspending -pchained-... done"	
+				exit
+			}
 		}
 			
 		*** mi set the data
@@ -620,6 +626,7 @@ program define pchained, eclass
 		foreach depVar of local miDepVars {
 			mi register imputed `depVar'*
 		}
+		
 		
 		*** mi impute chained
 		noi di _n in y "Performing multiple imputation..."
@@ -696,36 +703,6 @@ program define _parse_model, sclass
 		sreturn local `sname'`type' `model_opts'
 	}
 end
-
-*** Parser of the user input for conditions in inputation
-*** (sc1="if smoke == 1" sc2="if race == 1" y2 = "if county == 1") and variations
-capture program drop _parse_condition
-program define _parse_condition, sclass
-
-	args myinput 
-
-	local nlistex "[ ]*if [a-zA-Z0-9_&\|=><~! ]*"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
-
-	noi di `"`myinput'"'
-	while regexm(`"`myinput'"', `"`strregex'"') {
-		local scale `=regexs(0)'
-		noi di "`scale'"
-		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
-		gettoken sname model_opts: scale, parse("=")
-		gettoken left model_opts: model_opts, parse("=")
-		local model_opts = trim(`"`model_opts'"')
-		local model_opts = subinstr(`"`model_opts'"', `"""',"",.)
-		local model_opts = subinstr(`"`model_opts'"', `"'"',"",.)
-		local sname = trim("`sname'")
-		* noi di "`sname'"
-		*** Post result
-		sreturn local cond_`sname' `model_opts'
-	}
-end
-
-
-
 
 *** Compare elements of lists and print elements that differ
 capture program drop compare_lists
