@@ -32,7 +32,7 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 						SCALECOVars(varlist fv) ADDSADepvars(varlist) /// 
 						MIOptions(string asis) CATCutoff(integer 10) ///
 						MINCsize(integer 0) MERGOptions(string asis) ///
-						MODel(string asis) SAVEmidata(string)]
+						MODel(string asis) SAVEmidata(string) PRINTmodel]
 ```
 <br>
 
@@ -67,6 +67,7 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 |                | default: `keep(match)` |
 | *MODel*        | user can pass a model and options to `mi impute chained` for each imputed scale and stand-alone variable; this is a conditionally required argument; see below for details |
 | *SAVEmidata*   | save the mi data; valid path and filename required |
+| *PRINTmodel*   | prints the imputation model |
 
 <br>
 
