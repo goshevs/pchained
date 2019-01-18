@@ -17,7 +17,7 @@ set more off
 
 *** Categorical items
 simdata 500 3
-pchained s1_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained s1_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) 
 
 *** Treat items as continuous
 simdata 200 3
@@ -34,7 +34,7 @@ pchained s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(
 
 *** Categorical items
 simdata 500 3
-pchained s1_i s3_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
+pchained s1_i s3_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456)) print suspend
 
 
 *** Treat some scales as continuous
