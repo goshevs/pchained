@@ -343,7 +343,7 @@ program define pchained, eclass
 					foreach tlev of local timelevs {
 						local taggregs ""
 						foreach item of local myitems {	
-							if regexm("`item'", "^`remscale'[a-z0-9_]*_`timevar'`tlev'$") {
+							if regexm("`item'", "^`remscale'[a-zA-Z0-9_]*_`timevar'`tlev'$") {
 								local taggregs "`taggregs' `=regexs(0)'"
 							}
 						}
@@ -814,7 +814,7 @@ program define _meanSumInclude, sclass
 		foreach tlev of local timelevs {
 			local taggregs ""
 			foreach item of local myitems {	
-				if regexm("`item'", "^`scale'[a-z0-9_]*_`timevar'`tlev'$") {
+				if regexm("`item'", "^`scale'[a-zA-Z0-9_]*_`timevar'`tlev'$") {
 					local taggregs "`taggregs' `=regexs(0)'"
 				}
 			}
