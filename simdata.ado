@@ -61,6 +61,8 @@ program define simdata
 
 		bys id: gen y3 =  round(rnormal())
 		
+		bys id: gen y4 =  round(rnormal())
+		
 		bys id: gen yx = round(runiform())
 		bys id: gen yz = round(0 + 3 * runiform())
 				

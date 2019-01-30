@@ -106,7 +106,19 @@ pchained s1_i s2_i (y2, include(y3 mean(s1_i) sum(s2_i)) omit(x1 i.x2 y1)) (y3 i
 	          i(id) t(time) scalecov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
 			  mod(y2 = "pmm, knn(3)" y3 = "regress")
 
+			  
 
+*******************************************
+***  Imputing non-scale variables only  ***
+
+simdata 500 3
+pchained (y2, include(y3)) ///
+		 (y3 i.yx x1 i.yz, include(y2)), ///
+	     i(id) t(time) mio(add(1) chaindots rseed(123456)) ///
+		 mod(y2 = "pmm, knn(3)" y3 = "regress")
+
+
+			  
 	  
 			  
 *** Generate aggregates off of imputed vars

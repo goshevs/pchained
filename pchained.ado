@@ -38,7 +38,8 @@ program define pchained, eclass
 						       SCALECOVars(varlist fv) ADDSADepvars(varlist) /// 
 							   MIOptions(string asis) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
-							   MODel(string asis) SAVEmidata(string) debug ///
+							   MODel(string asis) SAVEmidata(string) ///
+							   CONDImputed(string asis) CONDComplete(string asis) debug ///
 							   PRINTmodel suspend] // USELABels
 
 	*** Warn user they need moremata
@@ -103,7 +104,6 @@ program define pchained, eclass
 		else {
 			local mergoptions ", `mergoptions'"
 		}
-
 	
 		*** Collect all items of all scales for reshape
 		local allitemsrs ""  // collection of all items (renamed for reshape)
@@ -111,7 +111,7 @@ program define pchained, eclass
 			capture unab myitems: `scale'*
 			*** check whether elements of namelist are variables
 			if (_rc != 0) {
-				di in r "Stub `scale' is not associated with a scale"
+				di in r "Stub `scale' is not associated with a scale (does not identify a set of variables in the dataset)"
 				exit 111
 			}
 			*** rename variables in dataset and in the locals to facilitate reshape
@@ -169,6 +169,84 @@ program define pchained, eclass
 			noi di "********************************************************"		
 		}
 		
+		*** Prepare conditions for reshape
+		
+		_parse_condition `"`condimputed'"'
+		
+		* noi di "`allitemsrs'"
+		
+		*** Identify variables
+		*** collect all left and right sides
+		local lSide ""
+		local rSide ""
+		foreach el in `:s(macros)' {
+			if regexm("`el'", "^ifL_.+") {
+				local match "`s(`=regexs(0)')'"
+				if regexm("`match'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
+					local condScale "`=regexs(2)'"
+					local inNamelist: list namelist & condScale
+					if "`inNamelist'" == "" {
+						noi di in r "Scale in conditional imputation is not present in the model"
+						exit 489
+					}
+					/*
+					else {
+						*** do something"
+					}
+					*/
+				}
+				else {
+					local lSide "`lSide' `match'" // adding variable to list
+				}		
+			}
+			else if regexm("`el'", "^ifR_.+") {
+				local match "`s(`=regexs(0)')'"
+				if regexm("`match'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
+					local condScale "`=regexs(2)'"
+					noi di "`namelist'"
+					local inNamelist: list namelist & condScale
+					if "`inNamelist'" == "" {
+						noi di in r "Scale in conditional imputation is not present in the model"
+						exit 489
+					}
+					/*
+					else {
+						*** do something"
+					}
+					*/
+				}
+				else {
+					local rSide "`rSide' `match'"
+				}
+			}
+		}
+		
+		*** Separates variables in the dataset from other stuff
+		local vars "`lSide' `rSide'"
+		local condVars ""
+		foreach i of local vars {
+			capture unab test: `i'
+			if _rc  == 0 {
+				*** Add to variable list
+				local condVars "`condVars' `i'"
+			}
+		}
+		
+		local condVars: list uniq condVars  // remove repeats
+		
+		*** Check whether cond vars are already present in the list of other vars
+		local checkCondVar: list condVars & miDepVarsOriginal
+		local checkCondVar: list condVars - checkCondVar
+		
+		*noi di "`checkCondVar'"
+		*noi di "`condVars'"
+		*noi di "`miDepVarsOriginal'"
+		
+		if "`checkCondVar'" != "" {
+			noi di in r "Variable(s) `checkCondVar' in conditional imputation is(are) not included in the model"
+			exit 489
+		}
+		
 		*** Collect the level of timevar
 		levelsof `timevar', local(timelevs)
 		
@@ -182,7 +260,7 @@ program define pchained, eclass
 		
 		*** Undocumented feature, stop execution to debug after reshaping
 		if ("`debug'" ~= "") {
-			noi di "Debugging interruption requested."
+			noi di "Debugging suspension requested."
 			exit
 		}
 			
@@ -379,12 +457,132 @@ program define pchained, eclass
 			* no di "`finalScale'"
 			* no di "`include_items'"
 			* exit
-			
-			
+						
 			*** write out the imputation models for the scales
 			foreach depvar of local finalScale {
 				local rhs_imputed = trim(subinstr("`finalScale'", "`depvar'", "", .))
+			
+				*** if present, incorporate conditional imputation
+				_parse_condition `"`condimputed'"'
+				* noi sreturn list
 				
+				if "cond_`scale'" ~= "" {
+					local condVars "`s(ifL_`scale')'"
+					local conditions "`s(ifR_`scale')'"
+					local wSigns "`s(ifS_`scale')'"
+					local bSigns "`s(ifB_`scale')'"
+				}
+				if regexm("`depvar'", ".+_`timevar'([0-9]+)$") {
+					local tp "`=regexs(1)'"
+					*** Rebuilding the conditions
+					local myCount = 1
+					local condImp ""
+					
+					*** Rebuilding LHS
+					foreach j of local condVars {
+					
+					
+					*** >------------- GOES INTO A FUNCTION
+						*** Identify means and sums in LHS conditions
+						if regexm("`j'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
+							local aggType "`=regexs(1)'"
+							unab fullItemList: `=regexs(2)'*
+							local timeItemList ""
+							foreach item of local fullItemList { // collect items for same time period
+								if regexm("`item'", ".+_`timevar'`tp'") {
+									local timeItemList `=itrim("`timeItemList' `item'")'
+								}
+							}
+							local sumItemList = subinstr("`timeItemList'", " ", "+", .)	
+							if ("`aggType'" == "mean") {
+								local len: word count `timeItemList'
+								local lhsExpr "((`sumItemList')/`len')"
+							}
+							else if ("`aggType'" == "sum") {
+								local lhsExpr "(`sumItemList')"
+							}
+						}
+						else {
+							local lhsExpr "`j'_`timevar'`tp'"
+						}
+						
+					*** <------------- GOES INTO A FUNCTION
+						
+						*** Rebuilding RHS
+						local right: word `myCount' of `conditions'
+						
+						**** FUNCTION REPEATS HERE
+						
+											
+						
+						
+						*** Building the dependent variable-specific condition
+						local condImp `"`condImp' `lhsExpr' `:word `myCount' of `wSigns'' `rhsExpr' `:word `myCount' of `bSigns''"'
+						local ++myCount
+					}
+					noi di "`condImp'"
+					exit
+					
+						
+							
+							
+						
+					*** Build the condition
+					
+					
+					
+					local i = 1
+					while `condVars" ~= "" {
+						`:word `i' of "`condVars'"
+					
+					foreach var of local condVars {
+						foreach wsign of local wSings {
+							foreach 
+						"`=regexs(1)'"
+				}
+				exit
+				
+				
+				
+				
+				
+			
+				s(ifR_`scale')
+				s(ifS_`scale')
+				s(ifB_`scale')
+		   
+		   
+				
+			noi sreturn list
+			noi di "`scale'"
+			exit
+			
+			
+						*** retrieve time period of depVar
+						if regexm("`var'","_`timevar'([0-9]+)$") {
+							local timePeriod `=regexs(1)'
+						}					
+						*** mean score?
+						if regexm("`miIncVars'","mean\(([a-zA-Z0-9_ ]+)\)") {
+							local meanList `=regexs(1)'
+							local meanRemove `=regexs(0)'
+							// to replace from period-specific to all periods, replace timePeriod with timelevs
+							_meanSumInclude "`meanList'" "mean" "`timevar'" "`timelevs'"
+							local meanList "`s(include_items)'"
+						}
+						*** sum score?
+						if regexm("`miIncVars'","sum\(([a-zA-Z0-9_ ]+)\)") {
+							local sumList `=regexs(1)'
+							local sumRemove `=regexs(0)'
+							// to replace from period-specific to all periods, replace timePeriod with timelevs
+							_meanSumInclude "`sumList'" "sum" "`timevar'" "`timelevs'"
+							local sumList "`s(include_items)'"
+						}
+			
+			
+			
+			
+			
 				*** Include imputed variables in parenthesis
 				local rhs_imputed_pr ""
 				foreach rhs of local rhs_imputed {
