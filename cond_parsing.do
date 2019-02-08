@@ -74,7 +74,7 @@ sreturn list
 capture program drop _construct_conditions
 program define _construct_conditions, sclass
 	
-	args j timevar tp miDepVarsOriginal cov_invar
+	args j timevar tp miDepVarsOriginal cov_invar cov_var
 
 	if regexm("`j'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
 		local aggType "`=regexs(1)'"
@@ -125,9 +125,9 @@ end
 capture program drop _condimputation
 program define _condimputation, sclass
 
-	args condimputed scale depvar timevar miDepVarsOriginal cov_invar
+	args condimputed scale depvar timevar miDepVarsOriginal cov_invar cov_var type
 	
-	_parse_condition `"`condimputed'"'
+	_parse_condition `"`condimputed'"' "`type'"
 		
 	if regexm("`depvar'", "(.+)_`timevar'([0-9]+)$") {
 		local depvar "`=regexs(1)'"
@@ -138,10 +138,10 @@ program define _condimputation, sclass
 	}
 
 	if "cond_`depvar'" ~= "" {
-		local condLHS "`s(ifL_`depvar')'"   
-		local condRHS "`s(ifR_`depvar')'"
-		local wSigns "`s(ifS_`depvar')'"
-		local bSigns "`s(ifB_`depvar')'"
+		local condLHS "`s(ifL`type'_`depvar')'"   
+		local condRHS "`s(ifR`type'_`depvar')'"
+		local wSigns "`s(ifS`type'_`depvar')'"
+		local bSigns "`s(ifB`type'_`depvar')'"
 	}
 
 	*** Rebuilding the conditions
@@ -151,20 +151,30 @@ program define _condimputation, sclass
 	*** Rebuilding LHS
 	foreach j of local condLHS {
 		*** Construct the LHS
-		noi _construct_conditions "`j'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'"
+		noi _construct_conditions "`j'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'" "`cov_var'"
 		local lhsExpr `s(expr)'
 		
 		*** Rebuilding RHS
 		local right: word `myCount' of `condRHS'
-		noi _construct_conditions "`right'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'"
+		noi _construct_conditions "`right'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'" "`cov_var'"
 		local rhsExpr `s(expr)'
 
 		*** Building the dependent variable-specific condition
 		local condImp `"`condImp' `lhsExpr' `:word `myCount' of `wSigns'' `rhsExpr' `:word `myCount' of `bSigns''"'
 		local ++myCount
 	}
-	
-	sreturn local condImp "`condImp'"
+	if "`condImp'" ~= "" {
+		if "`type'" == ""  {
+			sreturn local condImp "cond(if`condImp')"
+		}
+		else {
+			sreturn local cond`type' "if`condImp'"
+		}
+	}
+	else {
+		sreturn local condImp ""
+		sreturn local cond`type' ""
+	}
 	
 end
 

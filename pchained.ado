@@ -467,9 +467,13 @@ program define pchained, eclass
 			foreach depvar of local finalScale {
 				local rhs_imputed = trim(subinstr("`finalScale'", "`depvar'", "", .))
 				
-				***  incorporate condition into the imputation model, if provided
-				_condimputation `"`condimputed'"' "`scale'" "`depvar'" "`timevar'" "`miDepVarsOriginal'" "`cov_invar'"
-				local condImp "cond(if`s(condImp)')"
+				***  incorporate conditional imputation into the imputation model, if provided
+				noi _condimputation `"`condimputed'"' "`scale'" "`depvar'" "`timevar'" "`miDepVarsOriginal'" "`cov_invar'"
+				local condImp "`s(condImp)'"
+
+				***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
+				noi _condimputation `"`condcomplete'"' "`scale'" "`depvar'" "`timevar'" "" "`cov_invar'" "`cov_var'" "Comp"
+				local condComp "`s(condComp)'"
 
 /*				
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>				
@@ -528,18 +532,21 @@ program define pchained, eclass
 				local userModel `"`s(`scale'_model)'"'
 				if (`"`userModel'"' == "") {
 					if `: list depvar in bin' {
-						local mymodel "`mymodel' (logit, noimputed augment include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
+						local mymodel "`mymodel' (logit `condComp', noimputed augment include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
 					}
 					else if `: list depvar in cat' {
-						local mymodel "`mymodel' (ologit, noimputed augment include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
+						local mymodel "`mymodel' (ologit `condComp', noimputed augment include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
 					}
 					else {
-						local mymodel "`mymodel' (reg, noimputed include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "				
+						local mymodel "`mymodel' (reg `condComp', noimputed include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "				
 					}
 				}
 				else {
 					if (regexm("`userModel'", ",[ ]*") == 0) {
-						local userModel "`userModel', "
+						local userModel "`userModel' `condComp', "
+					}
+					else {
+						local userModel "`=subinstr("`userModel'", ",", " `condComp',",1)'"
 					}
 					local mymodel "`mymodel' (`userModel' noimputed include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
 				}
@@ -639,6 +646,16 @@ program define pchained, eclass
 				*** Build the model for the stand-alone var at every timepoint
 				foreach var of local miDepVar {
 					
+					***  incorporate conditional imputation into the imputation model, if provided
+					noi _condimputation `"`condimputed'"' "" "`var'" "`timevar'" "`miDepVarsOriginal'" "`cov_invar'"
+					local condImp "`s(condImp)'"
+
+					***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
+					noi _condimputation `"`condcomplete'"' "" "`var'" "`timevar'" "" "`cov_invar'" "`cov_var'" "Comp"
+					local condComp "`s(condComp)'"
+					noi di "`condComp'"
+					
+				
 					*** create the imputed variable lists in include
 					if "`miIncVars'" ~= "" {					
 						*** include implies noimputed!!!
@@ -673,8 +690,12 @@ program define pchained, eclass
 					}
 					*** extract the model from user input
 					if (regexm("`userModel'", ",[ ]*") == 0) {
-						local userModel "`userModel', "
+						local userModel "`=itrim("`userModel' `condComp', ")'"
 					}
+					else {
+						local userModel "`=subinstr("`userModel'", ",", " `condComp',", 1)'"
+					}
+					noi di "`userModel'"
 					
 					*** retrieve the list of omited vars
 					if "`omit'" ~= "" {
@@ -714,10 +735,7 @@ program define pchained, eclass
 						local includeOpt "include(`miCovWide' `meanList' `sumList')"
 					}
 					
-					***  incorporate condition into the imputation model, if provided
-					_condimputation `"`condimputed'"' "" "`var'" "`timevar'" "`miDepVarsOriginal'" "`cov_invar'"
-					local condImp "cond(if`s(condImp)')"
-
+	
 /*	
 >>>>>>>>>>>>>>>>>>>>
 					*** if condi() specified, incorporate condition into the imputation model
