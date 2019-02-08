@@ -7,6 +7,7 @@
 *
 *
 *
+
 *** SYNTAX ***
 *** anything     = unique stub names of the scale(s) to be imputed (takes multiple scales)
 *** Ivar         = cluster identifier (i.e. person, firm, country id)
@@ -22,6 +23,10 @@
 *** MODel        = user controls the imputation model used for a specific scale
 *** SAVEmidata   = save the mi data; valid path and filename required
 *** PRINTmodel   = prints the imputation model
+*** suspend      = 
+*D** CONDImputed  = 
+*D** CONDComplete = 
+*D** allItems     = by-passing Plumpton
 *** debug        = undocumented option: interrupts execution after reshape
 *** USELabels    = use labels of item/scale if exist to classify items 	(not in use)
 
@@ -461,14 +466,20 @@ program define pchained, eclass
 			*** write out the imputation models for the scales
 			foreach depvar of local finalScale {
 				local rhs_imputed = trim(subinstr("`finalScale'", "`depvar'", "", .))
-			
-				*** if present, incorporate conditional imputation
+				
+				***  incorporate condition into the imputation model, if provided
+				_condimputation `"`condimputed'"' "`scale'" "`depvar'" "`timevar'" "`miDepVarsOriginal'" "`cov_invar'"
+				local condImp "cond(if`s(condImp)')"
+
+/*				
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>				
+				
+				*** if condi() specified, incorporate condition into the imputation model
 				_parse_condition `"`condimputed'"'
-				* noi sreturn list
 				
 				if "cond_`scale'" ~= "" {
-					local condVars "`s(ifL_`scale')'"
-					local conditions "`s(ifR_`scale')'"
+					local condLHS "`s(ifL_`scale')'"   
+					local condRHS "`s(ifR_`scale')'"
 					local wSigns "`s(ifS_`scale')'"
 					local bSigns "`s(ifB_`scale')'"
 				}
@@ -479,110 +490,29 @@ program define pchained, eclass
 					local condImp ""
 					
 					*** Rebuilding LHS
-					foreach j of local condVars {
-					
-					
-					*** >------------- GOES INTO A FUNCTION
-						*** Identify means and sums in LHS conditions
-						if regexm("`j'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
-							local aggType "`=regexs(1)'"
-							unab fullItemList: `=regexs(2)'*
-							local timeItemList ""
-							foreach item of local fullItemList { // collect items for same time period
-								if regexm("`item'", ".+_`timevar'`tp'") {
-									local timeItemList `=itrim("`timeItemList' `item'")'
-								}
-							}
-							local sumItemList = subinstr("`timeItemList'", " ", "+", .)	
-							if ("`aggType'" == "mean") {
-								local len: word count `timeItemList'
-								local lhsExpr "((`sumItemList')/`len')"
-							}
-							else if ("`aggType'" == "sum") {
-								local lhsExpr "(`sumItemList')"
-							}
-						}
-						else {
-							local lhsExpr "`j'_`timevar'`tp'"
-						}
-						
-					*** <------------- GOES INTO A FUNCTION
+					foreach j of local condLHS {
+						*** Construct the LHS
+						noi _construct_conditions "`j'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'"
+						local lhsExpr `s(expr)'
 						
 						*** Rebuilding RHS
-						local right: word `myCount' of `conditions'
-						
-						**** FUNCTION REPEATS HERE
-						
-											
-						
-						
+						local right: word `myCount' of `condRHS'
+						noi _construct_conditions "`right'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'"
+						local rhsExpr `s(expr)'
+			
 						*** Building the dependent variable-specific condition
 						local condImp `"`condImp' `lhsExpr' `:word `myCount' of `wSigns'' `rhsExpr' `:word `myCount' of `bSigns''"'
 						local ++myCount
 					}
-					noi di "`condImp'"
-					exit
-					
-						
-							
-							
-						
-					*** Build the condition
-					
-					
-					
-					local i = 1
-					while `condVars" ~= "" {
-						`:word `i' of "`condVars'"
-					
-					foreach var of local condVars {
-						foreach wsign of local wSings {
-							foreach 
-						"`=regexs(1)'"
 				}
-				exit
 				
+				if "`condImp'" ~= "" {
+					local condImp "cond(if`condImp')"
+				}
 				
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+*/
 				
-				
-				
-			
-				s(ifR_`scale')
-				s(ifS_`scale')
-				s(ifB_`scale')
-		   
-		   
-				
-			noi sreturn list
-			noi di "`scale'"
-			exit
-			
-			
-						*** retrieve time period of depVar
-						if regexm("`var'","_`timevar'([0-9]+)$") {
-							local timePeriod `=regexs(1)'
-						}					
-						*** mean score?
-						if regexm("`miIncVars'","mean\(([a-zA-Z0-9_ ]+)\)") {
-							local meanList `=regexs(1)'
-							local meanRemove `=regexs(0)'
-							// to replace from period-specific to all periods, replace timePeriod with timelevs
-							_meanSumInclude "`meanList'" "mean" "`timevar'" "`timelevs'"
-							local meanList "`s(include_items)'"
-						}
-						*** sum score?
-						if regexm("`miIncVars'","sum\(([a-zA-Z0-9_ ]+)\)") {
-							local sumList `=regexs(1)'
-							local sumRemove `=regexs(0)'
-							// to replace from period-specific to all periods, replace timePeriod with timelevs
-							_meanSumInclude "`sumList'" "sum" "`timevar'" "`timelevs'"
-							local sumList "`s(include_items)'"
-						}
-			
-			
-			
-			
-			
 				*** Include imputed variables in parenthesis
 				local rhs_imputed_pr ""
 				foreach rhs of local rhs_imputed {
@@ -598,20 +528,20 @@ program define pchained, eclass
 				local userModel `"`s(`scale'_model)'"'
 				if (`"`userModel'"' == "") {
 					if `: list depvar in bin' {
-						local mymodel "`mymodel' (logit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
+						local mymodel "`mymodel' (logit, noimputed augment include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
 					}
 					else if `: list depvar in cat' {
-						local mymodel "`mymodel' (ologit, noimputed augment include(`include_items' `rhs_imputed_pr')) `depvar' "
+						local mymodel "`mymodel' (ologit, noimputed augment include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
 					}
 					else {
-						local mymodel "`mymodel' (reg, noimputed include(`include_items' `rhs_imputed_pr')) `depvar' "				
+						local mymodel "`mymodel' (reg, noimputed include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "				
 					}
 				}
 				else {
 					if (regexm("`userModel'", ",[ ]*") == 0) {
 						local userModel "`userModel', "
 					}
-					local mymodel "`mymodel' (`userModel' noimputed include(`include_items' `rhs_imputed_pr')) `depvar' "
+					local mymodel "`mymodel' (`userModel' noimputed include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
 				}
 			} // end of loop over finalScale
 		}   // end of loop over scales
@@ -706,7 +636,7 @@ program define pchained, eclass
 				*noi di "`miCovWide'" 
 				*noi di "`covars_wide'"
 				
-				*** Build the model for the depvar at every timepoint
+				*** Build the model for the stand-alone var at every timepoint
 				foreach var of local miDepVar {
 					
 					*** create the imputed variable lists in include
@@ -784,8 +714,59 @@ program define pchained, eclass
 						local includeOpt "include(`miCovWide' `meanList' `sumList')"
 					}
 					
+					***  incorporate condition into the imputation model, if provided
+					_condimputation `"`condimputed'"' "" "`var'" "`timevar'" "`miDepVarsOriginal'" "`cov_invar'"
+					local condImp "cond(if`s(condImp)')"
+
+/*	
+>>>>>>>>>>>>>>>>>>>>
+					*** if condi() specified, incorporate condition into the imputation model
+					_parse_condition `"`condimputed'"'
+					
+					if regexm("`var'", "(.+)_`timevar'[0-9]+$") {
+						local depvar "`=regexs(1)'"
+					}
+					
+					if "cond_`depvar'" ~= "" {
+						local condLHS "`s(ifL_`depvar')'"   
+						local condRHS "`s(ifR_`depvar')'"
+						local wSigns "`s(ifS_`depvar')'"
+						local bSigns "`s(ifB_`depvar')'"
+					}
+					if regexm("`var'", ".+_`timevar'([0-9]+)$") {
+						local tp "`=regexs(1)'"
+						*** Rebuilding the conditions
+						local myCount = 1
+						local condImp ""
+						
+						*** Rebuilding LHS
+						foreach j of local condLHS {
+							*** Construct the LHS
+							noi _construct_conditions "`j'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'"
+							local lhsExpr `s(expr)'
+							
+							*** Rebuilding RHS
+							local right: word `myCount' of `condRHS'
+							noi _construct_conditions "`right'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'"
+							local rhsExpr `s(expr)'
+				
+							*** Building the dependent variable-specific condition
+							local condImp `"`condImp' `lhsExpr' `:word `myCount' of `wSigns'' `rhsExpr' `:word `myCount' of `bSigns''"'
+							local ++myCount
+						}
+					}
+					
+					
+					
+					if "`condImp'" ~= "" {
+						local condImp "cond(if`condImp')"
+					}
+<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+					*/	
+					
 					*** write the variable model out
-					local mymodel "`mymodel' (`userModel' `miOpts' `includeOpt' `omitOpt') `var' "
+					local mymodel "`mymodel' (`userModel' `miOpts' `includeOpt' `omitOpt' `condImp') `var' "
 					* noi di "`mymodel'"
 					*exit
 					
