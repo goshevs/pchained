@@ -108,7 +108,7 @@ program define _construct_conditions, sclass
 		else {
 			capture confirm number `j'
 			if _rc {
-				noi di _n "`j'"
+				* noi di _n "`j'"
 				noi di in r "Value or variable `j' on the RHS of condition is invalid."
 				error 489
 			}

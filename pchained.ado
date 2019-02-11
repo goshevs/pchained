@@ -174,6 +174,15 @@ program define pchained, eclass
 			noi di "********************************************************"		
 		}
 		
+		
+		*** Rename time variant covariated to facilitate reshape
+		local cov_var_rs ""
+		foreach cv of local cov_var {
+			ren `cv' `cv'_`timevar'
+			local cov_var_rs "`cov_var_rs' `cv'_`timevar'"
+		}
+			
+		
 		*** Prepare conditions for reshape
 		
 		_parse_condition `"`condimputed'"'
@@ -260,7 +269,7 @@ program define pchained, eclass
 		
 		*** Reshape to wide
 		noi di _n in y "Reshaping to wide..."
-		reshape wide `allitemsrs' `miDepVars' `cov_var', i(`ivar') j(`timevar')
+		reshape wide `allitemsrs' `miDepVars' `cov_var_rs', i(`ivar') j(`timevar')
 		order _all, alpha  // useful for debugging
 		
 		*** Undocumented feature, stop execution to debug after reshaping
@@ -593,6 +602,7 @@ program define pchained, eclass
 			noi di "********************************************************" _n ///
 			
 			_input_parser "`anything'"
+			
 			local iterModels = 1
 			while `"`s(ovar`iterModels')'"' ~= "" {
 				*** parse the syntax of the model
@@ -600,20 +610,23 @@ program define pchained, eclass
 				* noi sreturn list
 				local miCovVar "`s(covs)'"     // covariates
 				local miIncVars "`s(includeVars)'"   // other depVars/means/sums of scales
-				local miOmitVars "`s(omitVars)'" // omit
+				local miOmitVars "`s(omitVars)'"       // omit
 				local miOpts "`s(remaningOpts)'"         // other options
 				
 				*** retrieve the user supplied model
 				_parse_model `"`model'"' "_model"
 				local userModel `"`s(`s(depv)'_model)'"'
+				/*
 				if (regexm("`userModel'", ",[ ]*") == 0) {
 						local userModel "`userModel', "
 				}	
-				
+				*/
 				*** collect all periods of the dependent variable
 				unab miDepVar: `s(depv)'_`timevar'*
 				
+				
 				* noi di "`miDepVar'"
+				* noi di "`miIncVars'"
 				
 				*** collect all covariates for all periods
 				if "`miCovVar'" ~= "" {
@@ -643,6 +656,10 @@ program define pchained, eclass
 				*noi di "`miCovWide'" 
 				*noi di "`covars_wide'"
 				
+				local meanList ""
+				local sumList ""
+				local oDepVarList ""
+					
 				*** Build the model for the stand-alone var at every timepoint
 				foreach var of local miDepVar {
 					
@@ -653,9 +670,10 @@ program define pchained, eclass
 					***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
 					noi _condimputation `"`condcomplete'"' "" "`var'" "`timevar'" "" "`cov_invar'" "`cov_var'" "Comp"
 					local condComp "`s(condComp)'"
-					noi di "`condComp'"
+					* noi di "`condComp'"
 					
-				
+	
+					
 					*** create the imputed variable lists in include
 					if "`miIncVars'" ~= "" {					
 						*** include implies noimputed!!!
@@ -688,14 +706,15 @@ program define pchained, eclass
 						local oDepVarList = subinstr("`oDepVarList'","`sumRemove'", "", .)
 						local oDepVarList = stritrim("`oDepVarList'")
 					}
+					
 					*** extract the model from user input
 					if (regexm("`userModel'", ",[ ]*") == 0) {
-						local userModel "`=itrim("`userModel' `condComp', ")'"
+						local userModelVar "`userModel' `condComp',"
 					}
 					else {
-						local userModel "`=subinstr("`userModel'", ",", " `condComp',", 1)'"
+						local userModelVar "`=subinstr("`userModel'", ",", " `condComp',", 1)'"
 					}
-					noi di "`userModel'"
+					* noi di "`userModelVar'"
 					
 					*** retrieve the list of omited vars
 					if "`omit'" ~= "" {
@@ -712,8 +731,8 @@ program define pchained, eclass
 					*** collect oDepVars
 					* noi di "`oDepVarList'"
 					
+					local oDepVars ""
 					if "`oDepVarList'" ~= "" {  // this is from include()
-						local oDepVars ""
 						foreach mydVar of local oDepVarList {
 							unab myDVList: `mydVar'_`timevar'*
 							* noi di "`myDVList'"
@@ -725,6 +744,7 @@ program define pchained, eclass
 					* noi di "`updateRemaining'"
 					* noi di "`oDepVars'"
 					* noi di "`miOpts'"
+					* noi di "`includeOpt'"
 					
 					*** Review this!!
 					if regexm("`miOpts'", "noimputed") {
@@ -784,7 +804,7 @@ program define pchained, eclass
 					*/	
 					
 					*** write the variable model out
-					local mymodel "`mymodel' (`userModel' `miOpts' `includeOpt' `omitOpt' `condImp') `var' "
+					local mymodel "`mymodel' (`userModelVar' `miOpts' `includeOpt' `omitOpt' `condImp') `var' "
 					* noi di "`mymodel'"
 					*exit
 					
@@ -831,12 +851,12 @@ program define pchained, eclass
 		noi mi impute chained `model_full'
 
 		*** reshape to long
-		mi reshape long `allitemsrs' `miDepVars' `cov_var', i(`ivar') j(`timevar')
+		mi reshape long `allitemsrs' `miDepVars' `cov_var_rs', i(`ivar') j(`timevar')
 		
 		*** rename vars to original names
 		noi di "`miDepVars'"
 		noi di "`allitemsrs' `miDepVars'"
-		foreach var of varlist `allitemsrs' `miDepVars'  {
+		foreach var of varlist `allitemsrs' `miDepVars' `cov_var_rs' {
 			ren `var' `=subinstr("`var'", "_`timevar'","",.)'
 		}
 		

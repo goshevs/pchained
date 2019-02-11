@@ -54,14 +54,16 @@ program define simdata
 		bys id: gen x4 = round(1 + 3*runiform() + ih) if _n ==1
 		bys id: replace x4 = cond(x4[1] < 0, 0, x4[1])
 		bys id: replace x4 = cond(runiform() > 0.3, x4[_n -1] + 1, x4[_n-1]) if _n > 1 
-
+		bys id: gen x5 = abs(round(rnormal()))
+		
 		
 		** Generate ovars and covars
 		bys id: gen y2 = abs(rnormal())
-
-		bys id: gen y3 =  round(rnormal())
+		bys id: gen y3 = round(rnormal())
+		bys id: gen y4 = round(rnormal())
+		bys id: gen y5 = cond(y4 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
+		bys id: gen y6 = cond(x5 >= 2, cond(runiform() > 0.2, rnormal(), .), .)
 		
-		bys id: gen y4 =  round(rnormal())
 		
 		bys id: gen yx = round(runiform())
 		bys id: gen yz = round(0 + 3 * runiform())
@@ -102,19 +104,28 @@ program define simdata
 		*** Introduce missingness
 		********************************************************************************
 
-		foreach var of varlist s* y2 y3 {
+		foreach var of varlist s* y2 y3 y4 {
 			replace `var' = . if runiform() <0.05
 		}
 
 		* misstable sum s*
+		replace y5 = . if y4 == .
 		
 		
 		********************************************************************************
-		*** Split the sample in two groups
+		*** Split the sample into two groups
 		********************************************************************************
 		
 		bys id: gen group = round(runiform()) if _n == 1
 		bys id: replace group = group[1]
+		
+		********************************************************************************
+		*** Label conditional variables
+		********************************************************************************
+		
+		label var y5 "recorded if y4 >=0"
+		label var y6 "recorded if x5 >=2"
+			
 	}
 end
 ***
