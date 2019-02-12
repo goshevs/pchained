@@ -54,7 +54,7 @@ program define simdata
 		bys id: gen x4 = round(1 + 3*runiform() + ih) if _n ==1
 		bys id: replace x4 = cond(x4[1] < 0, 0, x4[1])
 		bys id: replace x4 = cond(runiform() > 0.3, x4[_n -1] + 1, x4[_n-1]) if _n > 1 
-		bys id: gen x5 = abs(round(rnormal()))
+		bys id: gen x5 = rnormal()
 		
 		
 		** Generate ovars and covars
@@ -62,7 +62,7 @@ program define simdata
 		bys id: gen y3 = round(rnormal())
 		bys id: gen y4 = round(rnormal())
 		bys id: gen y5 = cond(y4 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
-		bys id: gen y6 = cond(x5 >= 2, cond(runiform() > 0.2, rnormal(), .), .)
+		bys id: gen y6 = cond(x5 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
 		
 		
 		bys id: gen yx = round(runiform())
@@ -87,15 +87,31 @@ program define simdata
 		}
 
 		** Scale 4:
-		
 		forval i = 1/4 {
 			bys id: gen s4_i`i' = (50 * runiform() + ih) 
 			replace s4_i`i' = 0 if s4_i`i' < 0
 		}
 		
 		gen y1 = 0.5 + 1.5 * x1 - 0.5 * x2 + 1.5 * x3 + ih + rnormal()
+		
+		
+		** Scale 5 (conditional on x5):
+		gen mydraw = runiform()
+		forval i = 1/5 {
+			bys id: gen s5_i`i' = cond(x5[1] >= 0, cond(mydraw[1] > 0.3, round(5 * runiform() + ih), .), .) 
+			replace s5_i`i' = 0 if s5_i`i' < 0
+		}
 
-		drop ih
+		** Scale 6 (conditional on mean(s1_i)):
+		egen mymean = rowmean(s1_i*)
+		replace mydraw = runiform()
+		
+		forval i = 1/3 {
+			bys id: gen s6_i`i' = cond(mymean >= 1, cond(mydraw > 0.3, round(5 * runiform() + ih), .), .) 
+			replace s6_i`i' = 0 if s6_i`i' < 0
+		}
+		
+		drop ih mydraw mymean
 
 		sum
 
@@ -111,6 +127,17 @@ program define simdata
 		* misstable sum s*
 		replace y5 = . if y4 == .
 		
+		egen mymiss = rowmiss(s1_i*)
+		egen mymean = rowmean(s1_i*)
+		replace mymean = . if mymiss > 0
+		
+		foreach var of varlist s6_i* {
+			replace `var' = . if mymean ==.
+		}
+		
+		drop mymiss mymean
+		
+		
 		
 		********************************************************************************
 		*** Split the sample into two groups
@@ -124,7 +151,10 @@ program define simdata
 		********************************************************************************
 		
 		label var y5 "recorded if y4 >=0"
-		label var y6 "recorded if x5 >=2"
+		label var y6 "recorded if x5 >=0"
+		foreach var of varlist s5_* {
+			label var `var' "recorded if x5_time1 >= 0"
+		}
 			
 	}
 end

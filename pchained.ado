@@ -40,12 +40,13 @@ program define pchained, eclass
 
 	syntax anything [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
 						      [CONTinous(namelist) SCOREtype(string asis) ///
-						       SCALECOVars(varlist fv) ADDSADepvars(varlist) /// 
+						       SCALECOVars(varlist fv) SCALEOmit(string asis) ///
+							   SCALEInclude(string asis) ADDSADepvars(varlist) /// 
 							   MIOptions(string asis) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
 							   MODel(string asis) SAVEmidata(string) ///
 							   CONDImputed(string asis) CONDComplete(string asis) debug ///
-							   PRINTmodel suspend] // USELABels
+							   FULLscales PRINTmodel suspend] // USELABels
 
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
@@ -136,6 +137,7 @@ program define pchained, eclass
 		*** Get the union of scalecovars, miCovVars and miIncVars
 		local allcovars "`scalecovars' `miCovVars'"   // `miIncVars'"
 		local allcovars: list uniq allcovars
+		
 				
 		*** Prepare all covariates for reshape
 		if "`allcovars'" ~= "" {
@@ -143,6 +145,8 @@ program define pchained, eclass
 			*** Extract covariate names from covariate list (which may be fvvarlist)
 			fvrevar `allcovars', list
 			local covarsrs "`r(varlist)'"
+			local covarsrs: list uniq covarsrs
+			
 			* noi di "`covarsrs'"
 		
 			*** Separate time invariant from time variant covariates
@@ -181,7 +185,9 @@ program define pchained, eclass
 			ren `cv' `cv'_`timevar'
 			local cov_var_rs "`cov_var_rs' `cv'_`timevar'"
 		}
-			
+		
+		*** Create a list for all covariates (with new names) for reshape
+		local covarsrs_rs "`cov_var_rs' `cov_invar'"
 		
 		*** Prepare conditions for reshape
 		
@@ -248,13 +254,14 @@ program define pchained, eclass
 		
 		local condVars: list uniq condVars  // remove repeats
 		
+		
 		*** Check whether cond vars are already present in the list of other vars
 		local checkCondVar: list condVars & miDepVarsOriginal
 		local checkCondVar: list condVars - checkCondVar
 		
-		*noi di "`checkCondVar'"
-		*noi di "`condVars'"
-		*noi di "`miDepVarsOriginal'"
+		* noi di "`checkCondVar'"
+		* noi di "`condVars'"
+		* noi di "`miDepVarsOriginal'"
 		
 		if "`checkCondVar'" != "" {
 			noi di in r "Variable(s) `checkCondVar' in conditional imputation is(are) not included in the model"
@@ -265,7 +272,7 @@ program define pchained, eclass
 		levelsof `timevar', local(timelevs)
 		
 		*** Keep only variables of interest	
-		keep `allitemsrs' `miDepVars' `covarsrs' `ivar' `timevar' `byGroup' `exp'
+		keep `allitemsrs' `miDepVars' `covarsrs_rs' `ivar' `timevar' `byGroup' `exp'
 		
 		*** Reshape to wide
 		noi di _n in y "Reshaping to wide..."
@@ -428,37 +435,45 @@ program define pchained, eclass
 			
 			local include_items ""
 		
-			if "`remaining'" ~= "" {
-				*** Compute aggregates by the levels of timevar
-				foreach remscale of local remaining {
-					unab myitems: `remscale'*
-					foreach tlev of local timelevs {
-						local taggregs ""
-						foreach item of local myitems {	
-							if regexm("`item'", "^`remscale'[a-zA-Z0-9_]*_`timevar'`tlev'$") {
-								local taggregs "`taggregs' `=regexs(0)'"
+			if "`remaining'" ~= "" {   // if there are other scales
+				if "`fullscales'" == "" { //  if we have not requested full/complete scales
+					*** Compute aggregates by the levels of timevar
+					foreach remscale of local remaining {
+						unab myitems: `remscale'*
+						foreach tlev of local timelevs {
+							local taggregs ""
+							foreach item of local myitems {	
+								if regexm("`item'", "^`remscale'[a-zA-Z0-9_]*_`timevar'`tlev'$") {
+									local taggregs "`taggregs' `=regexs(0)'"
+								}
+							}
+							* noi di "`taggregs'"
+							*** This is where we write out the functions
+							local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
+							if "`scoretype'" == "sum" {
+								local include_items "`include_items' (`mysum')"
+							}	
+							else if "`scoretype'" == "mean" {
+								local nitems: word count `taggregs'	
+								local include_items "`include_items' (`mysum'/`nitems')"
+							}
+							else {
+								di in r "`scoretype' is not allowed as a score type"
+								exit 198
 							}
 						}
-						* noi di "`taggregs'"
-						*** This is where we write out the functions
-						local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
-						if "`scoretype'" == "sum" {
-							local include_items "`include_items' (`mysum')"
-						}	
-						else if "`scoretype'" == "mean" {
-							local nitems: word count `taggregs'	
-							local include_items "`include_items' (`mysum'/`nitems')"
-						}
-						else {
-							di in r "`scoretype' is not allowed as a score type"
-							exit 198
-						}
 					}
-				}
-				local include_items "`include_items'"
-				
+					local include_items "`include_items'"
+				} // end of fullscales
+				else {
+					foreach remscale of local remaining {
+						unab myitems: `remscale'*
+						local include_items "`include_items' `myitems'"
+					}
+				}	
 			} // end of remaining
-
+			
+			
 			*** adding any stand-alone variables to include
 			if ("`addsadepvars'" ~= "") {  // if stand-alone dep variable models are specified
 				foreach sadVar of local addsadepvars {
@@ -613,6 +628,8 @@ program define pchained, eclass
 				local miOmitVars "`s(omitVars)'"       // omit
 				local miOpts "`s(remaningOpts)'"         // other options
 				
+				* noi di "`miCovVar'"
+					
 				*** retrieve the user supplied model
 				_parse_model `"`model'"' "_model"
 				local userModel `"`s(`s(depv)'_model)'"'
@@ -636,6 +653,8 @@ program define pchained, eclass
 						local miCovWide "`miCovWide' `placeholder'"
 					}	
 				}
+				* noi di "`miCovVar'"
+				
 				
 				*** collect all omited variables
 				if "`miOmitVars'" ~= "" {
@@ -648,24 +667,32 @@ program define pchained, eclass
 				
 				*** if miCovWide are specified, all scalecovs are omitted
 				if ("`miCovWide'" ~= "" ) {
-					local omit "`covars_wide'"
+					*compare_lists "`covars_wide'" "`miCovWide'"
+					*local omit "`s(differences)'"
+					loca intersection: list covars_wide & miCovWide
+					local omit: list covars_wide - intersection
+					*local omit "`:list covars_wide - miCovWide'"
 				}
 				else if ("`miOmit'" ~= "") { // omited vars should be from the scalecovs list
 					local omit "`miOmit'"
 				}
-				*noi di "`miCovWide'" 
+				* noi di "`miCovWide'" 
 				*noi di "`covars_wide'"
 				
 				local meanList ""
 				local sumList ""
 				local oDepVarList ""
-					
+				local condImp ""
+				local condComp "" 
+				
 				*** Build the model for the stand-alone var at every timepoint
 				foreach var of local miDepVar {
 					
 					***  incorporate conditional imputation into the imputation model, if provided
 					noi _condimputation `"`condimputed'"' "" "`var'" "`timevar'" "`miDepVarsOriginal'" "`cov_invar'"
+					* noi sreturn list
 					local condImp "`s(condImp)'"
+					* noi di "`condImp'"
 
 					***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
 					noi _condimputation `"`condcomplete'"' "" "`var'" "`timevar'" "" "`cov_invar'" "`cov_var'" "Comp"
@@ -745,6 +772,7 @@ program define pchained, eclass
 					* noi di "`oDepVars'"
 					* noi di "`miOpts'"
 					* noi di "`includeOpt'"
+					* noi di "`var': `miCovWide'"
 					
 					*** Review this!!
 					if regexm("`miOpts'", "noimputed") {
@@ -754,54 +782,6 @@ program define pchained, eclass
 					else {
 						local includeOpt "include(`miCovWide' `meanList' `sumList')"
 					}
-					
-	
-/*	
->>>>>>>>>>>>>>>>>>>>
-					*** if condi() specified, incorporate condition into the imputation model
-					_parse_condition `"`condimputed'"'
-					
-					if regexm("`var'", "(.+)_`timevar'[0-9]+$") {
-						local depvar "`=regexs(1)'"
-					}
-					
-					if "cond_`depvar'" ~= "" {
-						local condLHS "`s(ifL_`depvar')'"   
-						local condRHS "`s(ifR_`depvar')'"
-						local wSigns "`s(ifS_`depvar')'"
-						local bSigns "`s(ifB_`depvar')'"
-					}
-					if regexm("`var'", ".+_`timevar'([0-9]+)$") {
-						local tp "`=regexs(1)'"
-						*** Rebuilding the conditions
-						local myCount = 1
-						local condImp ""
-						
-						*** Rebuilding LHS
-						foreach j of local condLHS {
-							*** Construct the LHS
-							noi _construct_conditions "`j'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'"
-							local lhsExpr `s(expr)'
-							
-							*** Rebuilding RHS
-							local right: word `myCount' of `condRHS'
-							noi _construct_conditions "`right'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'"
-							local rhsExpr `s(expr)'
-				
-							*** Building the dependent variable-specific condition
-							local condImp `"`condImp' `lhsExpr' `:word `myCount' of `wSigns'' `rhsExpr' `:word `myCount' of `bSigns''"'
-							local ++myCount
-						}
-					}
-					
-					
-					
-					if "`condImp'" ~= "" {
-						local condImp "cond(if`condImp')"
-					}
-<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-					*/	
 					
 					*** write the variable model out
 					local mymodel "`mymodel' (`userModelVar' `miOpts' `includeOpt' `omitOpt' `condImp') `var' "

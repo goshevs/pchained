@@ -18,13 +18,20 @@ capture program drop _parse_condition
 program define _parse_condition, sclass
 
 	args myinput type
+	
 
-	local nlistex "[a-zA-Z0-9_\(\)<>~=.&| ]+"
+	
+	local nlistex "[a-zA-Z(-0-9)_\(\)<>~=\.\&\| ]+"
 	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
-	local myvars "([a-zA-Z0-9_\(\) ]+)([<>~=]+)([a-zA-Z0-9_\(\) ]+)(\|?\&?)" // [a-zA-Z0-9_]\|\&\.\(\)]+"
+	local myvars "([a-zA-Z0-9_\(\) ]+)([<>~=]+)([a-zA-Z(-0-9)_\(\) ]+)(\|?\&?)" // [a-zA-Z0-9_]\|\&\.\(\)]+"
+	
+	*noi di `"`myinput'"'
+	*noi di "TEST 0"
 	
 	while regexm(`"`myinput'"', `"`strregex'"') {
 		local scale `=regexs(0)'
+		*noi di "TEST 1"
+		*noi di `"`scale'"'
 		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
 		gettoken sname cond: scale, parse("=")
 		gettoken left cond: cond, parse("=")
@@ -33,14 +40,14 @@ program define _parse_condition, sclass
 		local cond = subinstr(`"`cond'"', `"'"',"",.)
 		local sname = trim("`sname'")
 		
-		* noi di "`sname'"
+		*noi di "`sname'"
 		
 		*** parsing the if condition
 		local ifL "" // left side
 		local ifS "" // signs
 		local ifR "" // right side
 		local ifB "" // between
-		* noi di "`cond'"
+		*noi di "`cond'"
 		
 		local mycond = regexr(`"`cond'"', "^[ ]*if[ ]+", "")
 		while regexm(`"`mycond'"', `"`myvars'"') {
@@ -75,7 +82,7 @@ capture program drop _construct_conditions
 program define _construct_conditions, sclass
 	
 	args j timevar tp miDepVarsOriginal cov_invar cov_var
-
+	
 	if regexm("`j'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
 		local aggType "`=regexs(1)'"
 		unab fullItemList: `=regexs(2)'*
@@ -95,9 +102,9 @@ program define _construct_conditions, sclass
 		}
 	}
 	else {  // this is failing to pick up y2 as a var!
-		* noi di "`j'"
-		* noi di "`cov_invar'"
-		* noi di "`miDepVarsOriginal'"
+		*noi di "`j'"
+		*noi di "`cov_invar'"
+		*noi di "`miDepVarsOriginal'"
 		
 		if ("`:list j in cov_invar'" == "1") { // check the stand-alone varlist and time invar covars
 			local expr "`j'"
@@ -127,8 +134,8 @@ program define _condimputation, sclass
 
 	args condimputed scale depvar timevar miDepVarsOriginal cov_invar cov_var type
 	
-	_parse_condition `"`condimputed'"' "`type'"
-		
+	noi _parse_condition `"`condimputed'"' "`type'"
+	*noi sreturn list
 	if regexm("`depvar'", "(.+)_`timevar'([0-9]+)$") {
 		local depvar "`=regexs(1)'"
 		local tp "`=regexs(2)'"
@@ -177,166 +184,3 @@ program define _condimputation, sclass
 	}
 	
 end
-
-
-exit
-
-
-/*
-local test "`s(ifS_y3)'"
-foreach i of local test {
-	noi di in y "`i'"
-}
-*/
-
-
-*** Identifying whether variable or not
-local test1 "`s(ifR_y3)'"
-foreach i of local test1 {
-	noi di in y "`i'"
-	capture unab test: `i'
-	if _rc {
-		noi di "not a variable"
-	}
-	
-}
-
-exit
-
-
-
-
-capture program drop _parse_test
-program define _parse_test, sclass
-	args myinput
-	
-	
-
-
-end
-
-
-
-
-_parse_condition "`test'"
-sreturn list
-
-
-
-capture program drop _parse_model_condition
-program define _parse_model_condition, sclass
-
-	args myinput 
-
-	local nlistex "[a-zA-Z0-9_\(\)<>~=.&| ]+"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
-
-	while regexm(`"`myinput'"', `"`strregex'"') {
-		local scale `=regexs(0)'
-		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
-		gettoken sname cond: scale, parse("=")
-		gettoken left cond: cond, parse("=")
-		local cond = trim(`"`cond'"')
-		local cond = subinstr(`"`cond'"', `"""',"",.)
-		local cond = subinstr(`"`cond'"', `"'"',"",.)
-		local sname = trim("`sname'")
-		* noi di "`sname'"
-		*** Post result
-		sreturn local cond_`sname' `cond'
-
-	}
-end
-
-
-
-
-
-
-_parse_condition "`test'"
-foreach scale of local namelist {
-	local condStatement `"`s(cond_`scale')'"'
-	if `"`condStatement'"' ~= "" {
-		_parse_model_condition `"`condStatement'"'
-		
-		
-		local extraModels = 1
-	local miDepVarsOriginal ""
-	local miCovVars ""
-	while `"`s(ovar`extraModels')'"' ~= "" {
-		_parse_ovar_model "`s(ovar`extraModels')'"
-		* noi sreturn list
-		local miDepVarsOriginal "`miDepVarsOriginal' `s(depv)'"
-		local miCovVars "`miCovVars' `s(covs)'"
-		local ++extraModels
-	}
-	
-	foreach item of local myscale { 
-		foreach remscale of local remaining {
-			unab myitems: `remscale'*
-			foreach tlev of local timelevs {
-				local taggregs ""
-				foreach item of local myitems {	
-					if regexm("`item'", "^`remscale'[a-zA-Z0-9_]*_`timevar'`tlev'$") {
-						local taggregs "`taggregs' `=regexs(0)'"
-					}
-				}
-				* noi di "`taggregs'"
-				*** This is where we write out the functions
-				local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
-				if "`scoretype'" == "sum" {
-					local include_items "`include_items' (`mysum')"
-				}	
-				else if "`scoretype'" == "mean" {
-					local nitems: word count `taggregs'	
-					local include_items "`include_items' (`mysum'/`nitems')"
-				}
-				else {
-					di in r "`scoretype' is not allowed as a score type"
-					exit 198
-				}
-			}
-		}			
-	}			
-}
-exit
-				
-				
-				
-
-
-
-
-capture program drop _parse_condition
-program define _parse_condition, sclass
-
-	args myinput 
-
-	local nlistex "[a-zA-Z0-9_\(\)<>~=.&| ]+"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
-
-	while regexm(`"`myinput'"', `"`strregex'"') {
-		local scale `=regexs(0)'
-		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
-		gettoken sname cond: scale, parse("=")
-		gettoken left cond: cond, parse("=")
-		local cond = trim(`"`cond'"')
-		local cond = subinstr(`"`cond'"', `"""',"",.)
-		local cond = subinstr(`"`cond'"', `"'"',"",.)
-		local sname = trim("`sname'")
-		* noi di "`sname'"
-		*** Post result
-		sreturn local cond_`sname' `cond'
-
-	}
-end
-
-
-
-
-
-exit
-
-
-CONDImputation(ss_ = "if smoker == 1" y2 = "if mean(ss_) < 1.4" y3 = "if (sum(bea_) < .5 & mean(ss_) > 5) | smoker ~= 1")
-cond(associative_array)
-
