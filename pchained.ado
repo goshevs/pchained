@@ -26,7 +26,9 @@
 *** suspend      = 
 *D** CONDImputed  = 
 *D** CONDComplete = 
-*D** allItems     = by-passing Plumpton
+*D** SCALEInclude = 
+*D** SCALE = 
+*** FULLscales   = by-passing Plumpton
 *** debug        = undocumented option: interrupts execution after reshape
 *** USELabels    = use labels of item/scale if exist to classify items 	(not in use)
 
@@ -40,13 +42,13 @@ program define pchained, eclass
 
 	syntax anything [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
 						      [CONTinous(namelist) SCOREtype(string asis) ///
-						       SCALECOVars(varlist fv) SCALEOmit(string asis) ///
-							   SCALEInclude(string asis) ADDSADepvars(varlist) /// 
+						       SCALECOVars(varlist fv) SCALEInclude(string asis) ///
+							   SCALEOmit(string asis) ADDSADepvars(varlist) /// 
 							   MIOptions(string asis) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
-							   MODel(string asis) SAVEmidata(string) ///
-							   CONDImputed(string asis) CONDComplete(string asis) debug ///
-							   FULLscales PRINTmodel suspend] // USELABels
+							   MODel(string asis) CONDImputed(string asis) ///
+							   CONDComplete(string asis) FULLscales ///
+							   SAVEmidata(string) PRINTmodel suspend debug] // USELABels
 
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."

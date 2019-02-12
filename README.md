@@ -27,12 +27,15 @@ Syntax
 ---
 
 ```
-pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(varname)
+pchained [scale_stubs] [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(varname)
 					   [CONTinous(namelist) SCOREtype(string asis) ///
-						SCALECOVars(varlist fv) ADDSADepvars(varlist) /// 
+						SCALECOVars(varlist fv) SCALEInclude(string asis) ///
+						SCALEOmit(string asis) ADDSADepvars(varlist) /// 
 						MIOptions(string asis) CATCutoff(integer 10) ///
 						MINCsize(integer 0) MERGOptions(string asis) ///
-						MODel(string asis) SAVEmidata(string) PRINTmodel suspend]
+						MODel(string asis) SAVEmidata(string) ///
+						CONDImputed(string asis) CONDComplete(string asis) ///
+						FULLscales PRINTmodel suspend debug] 
 ```
 <br>
 
@@ -42,7 +45,6 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 
 | argument       | description            |
 |----------------|------------------------|
-| *scale_stubs*  | unique stub names of the scale(s) to be imputed (takes multiple scales) |
 | *Ivar*         | unique cluster/panel identifier (i.e. person, firm, country id) |
 | *Timevar*      | time/wave identifier |
 
@@ -52,11 +54,14 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 
 | argument       | description            |
 |----------------|------------------------|
+| *scale_stubs*  | unique stub names of the scale(s) to be imputed (takes multiple scales); can be omitted if `sadv_models` is defined |
 | *sadv_models*  | models for stand-alone variables to be imputed; see below for specific syntax|
 | *CONTinous*    | stub names of scales whose items should be treated as continuous |
 | *SCOREtype*    | mean score or sum score |
-|                | default: `mean`
+|                | default: `mean` |
 | *SCALECOVars*  | list of covariates to be included in the scale item imputatation models, supports factor variable syntax  |
+| *SCALEInclude* |  TODO |
+| *SCALEOmit*    |  TODO |
 | *ADDSADepvars* | list of stand-alone variables to be included in the scale item imputation equations; all periods of these variables are used in the imputation equation for an item |
 | *MIOptions*    | `mi impute chained` options to be passed on (`by()` is also allowed) |
 | *CATCutoff*    | maximum number of categories/levels to classify as categorical; if higher --> classified as continuous |
@@ -66,6 +71,9 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 | *MERGOptions*  | merge options to be passed on to `merge` upon merging the imputed data with the original data; imputed dataset is *master*, original dataset is *using* |
 |                | default: `keep(match)` |
 | *MODel*        | user can pass a model and options to `mi impute chained` for each imputed scale and stand-alone variable; this is a conditionally required argument; see below for details |
+| *CONDImputed*  |  TODO |
+| *CONDComplete* |  TODO |
+| *FULLscales*   |  TODO |
 | *SAVEmidata*   | save the mi data; valid path and filename required |
 | *PRINTmodel*   | prints the imputation model |
 | *suspend*      | turns the control of the imputation over to the user by suspending -pchained- immediately before imputation. Works only if `PRINTmodel` is specified |
