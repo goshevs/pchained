@@ -27,7 +27,7 @@ Syntax
 ---
 
 ```
-pchained [scale_stubs] [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(varname)
+pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(varname)
 					   [CONTinous(namelist) SCOREtype(string asis) ///
 						SCALECOVars(varlist fv) SCALEInclude(string asis) ///
 						SCALEOmit(string asis) ADDSADepvars(varlist) /// 
@@ -45,6 +45,7 @@ pchained [scale_stubs] [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(v
 
 | argument       | description            |
 |----------------|------------------------|
+| *scale_stubs*  | unique stub names of the scale(s) to be imputed (takes multiple scales); can be omitted if at least one `sadv_models` is defined (Sarah Jensen discovery!) |
 | *Ivar*         | unique cluster/panel identifier (i.e. person, firm, country id) |
 | *Timevar*      | time/wave identifier |
 
@@ -54,7 +55,6 @@ pchained [scale_stubs] [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(v
 
 | argument       | description            |
 |----------------|------------------------|
-| *scale_stubs*  | unique stub names of the scale(s) to be imputed (takes multiple scales); can be omitted if `sadv_models` is defined |
 | *sadv_models*  | models for stand-alone variables to be imputed; see below for specific syntax|
 | *CONTinous*    | stub names of scales whose items should be treated as continuous |
 | *SCOREtype*    | mean score or sum score |
@@ -70,10 +70,10 @@ pchained [scale_stubs] [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(v
 |                | default: `0` |
 | *MERGOptions*  | merge options to be passed on to `merge` upon merging the imputed data with the original data; imputed dataset is *master*, original dataset is *using* |
 |                | default: `keep(match)` |
-| *MODel*        | user can pass a model and options to `mi impute chained` for each imputed scale and stand-alone variable; this is a conditionally required argument; see below for details |
-| *CONDImputed*  |  TODO |
-| *CONDComplete* |  TODO |
-| *FULLscales*   |  TODO |
+| *MODel*        | the user can pass a model and options to `mi impute chained` for each imputed scale and stand-alone variable; this is a conditionally required argument; see below for details |
+| *CONDImputed*  | conditional imputation; corresponds to `cond()` in `mi impute chained`; see below for syntax |
+| *CONDComplete* | imputation conditional on the values of a complete regressor; see below for syntax |
+| *FULLscales*   | bypasses the Plumpton imputation approach and instead imputes using the complete set of items from remaining scales |
 | *SAVEmidata*   | save the mi data; valid path and filename required |
 | *PRINTmodel*   | prints the imputation model |
 | *suspend*      | turns the control of the imputation over to the user by suspending -pchained- immediately before imputation. Works only if `PRINTmodel` is specified |
@@ -124,6 +124,31 @@ If `sadv_models` is specified, option `MODel` is required for all stand-alone va
 
 <br>
 
+**Imputation subject to conditions**
+
+`pchained` supports conditioning on complete regressors and imputed variables (i.e. conditional imputation). 
+Conditioning on scale scores, means and sums, is also supported.
+
+To condition on complete regressors, the user needs to specify option `CONDComplete`. 
+The option has the following syntax:
+
+`condc(scale_stub or depvar = "if condition" [scale_stub or depvar = "if condition"]...)` 
+
+where `condition` is either a standard Stata condition or a condition which involves `means` or `sums` of scales. 
+Multiple conditions for multiple scales/stand-alone varibles can be specified. See section Examples for usage.
+
+To request conditional imputation, the user has to specify option `CONDImputed`. The option has the same syntax as 
+`CONDComplete` but the variables that are being conditioned on have to be imputed variables.
+
+An important requirement for imputation subject to conditions is to ensure "that missing 
+values of all conditioning variables [are] nested within missing values 
+of the conditional variable" (Stata Multiple-Imputation Reference Manual Release 15, p. 161).
+This requirement, which we will refer to as "the nesting condition" may be unclear to novice 
+users and therefore we have provided a use case in the Examples section.
+
+
+<br>
+
 Working with sensitive data?
 ---
 
@@ -137,8 +162,8 @@ Examples
 ---
 
 ```
-*******************
-***  One scale  ***
+********************************************************************************
+***  One scale                                                               ***
 
 *** Categorical items
 simdata 500 3
@@ -154,8 +179,8 @@ pchained s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(
                mod(s4_i = "pmm, knn(3)")
 
 
-*******************
-*** Two scales  ***
+********************************************************************************
+*** Two scales                                                               ***
 
 *** Categorical items
 simdata 500 3
@@ -172,8 +197,8 @@ pchained s2_i s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots r
                     mod(s2_i = "ologit" s4_i = "pmm, knn(3)")
 
 
-********************
-*** Three scales ***
+********************************************************************************
+*** Three scales                                                             ***
 
 *** Categorical items
 simdata 500 3
@@ -195,22 +220,22 @@ simdata 500 3
 pchained s1_i s2_i s4_i, i(id) t(time) cont(s2_i) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 
-********************
-***   By group   ***
+********************************************************************************
+***   By group                                                               ***
 
 simdata 1000 3
 pchained s1_i s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots by(group) rseed(123456))
 
 
-*************************
-***  Sampling Weight  ***
+********************************************************************************
+***  Sampling Weight                                                         ***
 
 simdata 1000 3
 pchained s1_i s4_i [pw=weight], i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
 
 
-****************************************************************
-***  Imputing non-scale variables together with scale items  ***
+********************************************************************************
+***  Imputing non-scale variables together with scale items                  ***
 
 *** 
 simdata 500 3
@@ -231,4 +256,62 @@ pchained s1_i s2_i (y2, include(y3 mean(s1_i) sum(s2_i)) omit(x1 i.x2 y1)) (y3 i
 			  mod(y2 = "pmm, knn(3)" y3 = "regress")
 
 
+			  
+
+********************************************************************************
+***  Imputing subject to conditions                                          ***
+
+
+***
+simdata 500 3
+bys id: gen x5_base = x5[1]
+
+*** ----->>>>>> Ensuring the nesting condition holds
+foreach var of varlist s5_i* {
+	replace `var' = -9999999 if x5_base < 0
+}
+
+egen mymiss = rowmiss(s1_i*)
+egen mymean = rowmean(s1_i*)
+replace mymean = . if mymiss > 0
+		
+foreach var of varlist s6_i* {
+	replace `var' = -9999999 if mymean < 1
+}
+
+drop mymiss mymean
+*** <<<<<<<----
+
+pchained s1_i s2_i s5_i s6_i ///
+			  (y2 i.x2, noimputed)  ///
+			  (y4 i.yx x1 i.yz x5, include(y2 mean(s1_i))) ///
+			  (y5 i.yx x1 i.yz x5 i.x2, include(y2 y4)) ///
+			  (y6 i.yx i.x2, noimputed), ///
+	          i(id) t(time) ///
+			  scalecov(x1 i.x2 x3 y1 x5_base) mio(add(1) chaindots rseed(123456)) ///
+			  mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)" ///
+				  y2 = "regress" y4 = "pmm, knn(3)" y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
+			  condc(s5_i = "if x5_base > -1") ///
+			  condi(s6_i = "if mean(s1_i) > 0")
+
+			  
+*** 
+simdata 500 3
+
+*** ----->>>>>> Ensuring the nesting condition holds
+replace y5 = -9999999 if y4 < 0  
+replace y6 = -9999999 if x5 < 0  
+*** <<<<<<<----
+
+pchained s1_i s2_i ///
+			  (y2 x2, noimputed) ///
+			  (y4 i.yx x1 i.yz x5, include(y2 mean(s1_i))) ///
+			  (y5 i.yx x1 i.yz x5, include(y2 y4)) (y6 x2, noimputed), ///
+	          i(id) t(time) ///
+			  scalecov(x1 i.x2 x3 y1 x5) mio(add(1) chaindots rseed(123456)) ///
+			  mod(s1_i = "pmm, knn(3)" y2 = "regress" y4 = "pmm, knn(3)" ///
+			      y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
+			  condi(y5 = "if y4 > -1") ///
+			  condc(y6 = "if x5 >= 0")	  
+			  
 ```
