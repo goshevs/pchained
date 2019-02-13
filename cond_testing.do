@@ -39,7 +39,6 @@ pchained s1_i s2_i s5_i s6_i ///
 			  
 			  
 			  
-exit
 			  
 *
 ********************************************************************************
@@ -64,7 +63,7 @@ not done
 */
 replace y6 = -9999999 if x5 < 0  // assign a large number that can be replaces with missing after imputation
  
-pchained s1_i s2_i (y2 x2, noimputed) (y4 i.yx x1 i.yz x5, include(y2 mean(s1_i))) (y5 i.yx x1 i.yz x5, include(y2 y4)) (y6 x2, noimputed), ///
+pchained s1_i s2_i (y2 x2, noimputed) (y4 i.yx x1 i.yz x5, include(y2 mean(s1_i))) (y5 i.yx x1 i.yz x5, include(y2 y4)) (y6 i.x2, noimputed), ///
 	          i(id) t(time) scalecov(x1 i.x2 x3 y1 x5) mio(add(1) chaindots rseed(123456)) ///
 			  mod(s1_i = "pmm, knn(3)" y2 = "regress" y4 = "pmm, knn(3)" y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
 			  condi(y5 = "if y4 > -1") ///

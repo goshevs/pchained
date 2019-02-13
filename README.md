@@ -45,7 +45,7 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 
 | argument       | description            |
 |----------------|------------------------|
-| *scale_stubs*  | unique stub names of the scale(s) to be imputed (takes multiple scales); can be omitted if at least one `sadv_models` is defined (Sarah Jensen discovery!) |
+| *scale_stubs*  | unique stub names of the scale(s) to be imputed (takes multiple scales); can be omitted if at least one `sadv_models` is defined (Sarah Jensen's discovery!) |
 | *Ivar*         | unique cluster/panel identifier (i.e. person, firm, country id) |
 | *Timevar*      | time/wave identifier |
 
@@ -287,7 +287,7 @@ pchained s1_i s2_i s5_i s6_i ///
 			  (y4 i.yx x1 i.yz x5, include(y2 mean(s1_i))) ///
 			  (y5 i.yx x1 i.yz x5 i.x2, include(y2 y4)) ///
 			  (y6 i.yx i.x2, noimputed), ///
-	          i(id) t(time) ///
+			  i(id) t(time) ///
 			  scalecov(x1 i.x2 x3 y1 x5_base) mio(add(1) chaindots rseed(123456)) ///
 			  mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)" ///
 				  y2 = "regress" y4 = "pmm, knn(3)" y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
@@ -307,11 +307,20 @@ pchained s1_i s2_i ///
 			  (y2 x2, noimputed) ///
 			  (y4 i.yx x1 i.yz x5, include(y2 mean(s1_i))) ///
 			  (y5 i.yx x1 i.yz x5, include(y2 y4)) (y6 x2, noimputed), ///
-	          i(id) t(time) ///
+			  i(id) t(time) ///
 			  scalecov(x1 i.x2 x3 y1 x5) mio(add(1) chaindots rseed(123456)) ///
 			  mod(s1_i = "pmm, knn(3)" y2 = "regress" y4 = "pmm, knn(3)" ///
 			      y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
 			  condi(y5 = "if y4 > -1") ///
 			  condc(y6 = "if x5 >= 0")	  
-			  
+		
+		
+		
+********************************************************************************
+***  Imputing on complete remaining scales (Plumpton bypass)                 ***
+
+***		
+simdata 500 3
+pchained s1_i s3_i, i(id) t(time) full scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+
 ```
