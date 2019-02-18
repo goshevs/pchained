@@ -1,6 +1,6 @@
 * Plumpton with -mi impute chained-
 * Authors: Simo Goshev, Zitong Liu
-* Version: 0.4
+* Version: 0.5
 *
 *
 *
@@ -74,7 +74,6 @@ program define pchained, eclass
 		local miCovVars ""
 		while `"`s(ovar`extraModels')'"' ~= "" {
 			_parse_ovar_model "`s(ovar`extraModels')'"
-			* noi sreturn list
 			local miDepVarsOriginal "`miDepVarsOriginal' `s(depv)'"
 			local miCovVars "`miCovVars' `s(covs)'"
 			local ++extraModels
@@ -589,7 +588,8 @@ program define pchained, eclass
 				local miOpts "`s(remaningOpts)'"         // other options
 				
 				* noi di "`miCovVar'"
-					
+				* noi di "`miIncVars'"
+				
 				*** retrieve the user supplied model
 				_parse_model `"`model'"' "_model"
 				local userModel `"`s(`s(depv)'_model)'"'
@@ -606,24 +606,47 @@ program define pchained, eclass
 				* noi di "`miIncVars'"
 				
 				*** collect all covariates for all periods
+				local miCovWide ""
 				if "`miCovVar'" ~= "" {
-					local miCovWide ""
 					foreach var of local miCovVar {
-						fvunab placeholder: `var'*
-						local miCovWide "`miCovWide' `placeholder'"
+						fvunab placeholder: `var'*					
+						foreach myVar of local placeholder {
+							if regexm("`myVar'", "`var'(_`timevar'[0-9]+)?$") {
+								local miCovWide "`miCovWide' `myVar'"
+							}
+						}
 					}	
 				}
+				
+				noi di "`miCovWide'"
+				
 				* noi di "`miCovVar'"
-				
-				
+				* noi di "`miOmitVars'"
+				* noi di "`covars_wide'"
+
 				*** collect all omited variables
 				if "`miOmitVars'" ~= "" {
 					local miOmit ""
+					
+					*** Build list of omitted vars
+					local myOmitList ""
 					foreach var of local miOmitVars {
-						fvunab placeholder: `var'*
-						local miOmit "`miOmit' `placeholder'"
-					}	
+						fvunab fullList: `var'*
+						local myOmitList "`myOmitList' `fullList'"
+					}
+					
+					*** Compare each covariate in scalecovs to the omitted list
+					foreach cvar of local covars_wide {
+						fvrevar `cvar', list
+						local myCovar "`r(varlist)'"
+						if `:list myCovar in myOmitList' {
+							local miOmit "`miOmit' `cvar'"
+						}
+					}
 				}
+
+				* noi di "`miOmit'"
+				* noi di "`miCovWide'"
 				
 				*** if miCovWide are specified, all scalecovs are omitted
 				if ("`miCovWide'" ~= "" ) {
@@ -642,8 +665,10 @@ program define pchained, eclass
 				local meanList ""
 				local sumList ""
 				local oDepVarList ""
+				local oDepVars ""
 				local condImp ""
 				local condComp "" 
+				local oDepvarListFiltered "" 
 				
 				*** Build the model for the stand-alone var at every timepoint
 				foreach var of local miDepVar {
@@ -688,11 +713,44 @@ program define pchained, eclass
 							_meanSumInclude "`sumList'" "sum" "`timevar'" "`timelevs'"
 							local sumList "`s(include_items)'"
 						}
+						
+						* noi di "`var': `oDepVarList'"
+						
 						*** other depVar?
 						local oDepVarList = subinstr("`miIncVars'","`meanRemove'", "", .)
 						local oDepVarList = subinstr("`oDepVarList'","`sumRemove'", "", .)
 						local oDepVarList = stritrim("`oDepVarList'")
-					}
+						
+						* noi di "`var': `oDepVarList'"
+						
+						
+						*** Check for non-imputed variables and include only those vars that are in miDepVarsOriginal but not
+						*** the dep var itself
+						
+						if "`oDepVarList'" ~= "" {
+							foreach ovar of local oDepVarList {
+								unab fullList: `ovar'*
+								foreach fvar of local fullList {
+									if regexm("`fvar'", "(.+)_`timevar'[0-9]+$") {
+										local varStub "`=regexs(1)'" // y1
+										if `:list varStub in miDepVarsOriginal' { // check if var in depvarlist
+											if regexm("`var'", "(.+)_`timevar'[0-9]+$") {
+												if "`=regexs(1)'" != "`varStub'" {
+													local oDepvarListFiltered "`oDepvarListFiltered' `fvar'"
+												}
+											}
+										}					
+									}
+								}
+								if `:list ovar in namelist' {  // check if var in list of scales
+									unab fullList: `ovar'*
+									local oDepvarListFiltered "`oDepvarListFiltered' `fullList'"
+								}
+							}	
+						}
+					}	
+					*noi di "`var': `oDepVarList'"
+					*noi di "`var': `oDepvarListFiltered'"
 					
 					*** extract the model from user input
 					if (regexm("`userModel'", ",[ ]*") == 0) {
@@ -717,15 +775,11 @@ program define pchained, eclass
 					
 					*** collect oDepVars
 					* noi di "`oDepVarList'"
+					* noi di "`oDepvarListFiltered'"
 					
-					local oDepVars ""
-					if "`oDepVarList'" ~= "" {  // this is from include()
-						foreach mydVar of local oDepVarList {
-							unab myDVList: `mydVar'_`timevar'*
-							* noi di "`myDVList'"
-							foreach mydVarT of local myDVList {
-								local oDepVars "`oDepVars' (`mydVarT')"
-							}
+					if "`oDepvarListFiltered'" ~= "" {  // this is from include()
+						foreach mydVar of local oDepvarListFiltered {
+							local oDepVars "`oDepVars' (`mydVar')"
 						}
 					}
 					* noi di "`updateRemaining'"
@@ -873,6 +927,87 @@ program define compare_lists, sclass
 end
 
 
+capture program drop _input_parser
+program define _input_parser, sclass
+
+	args input_string
+	
+	sreturn clear
+	
+	local regex_scale "^[a-zA-Z0-9_ ]+"
+	local model_exp "([a-zA-Z0-9_]+[a-zA-Z0-9_. ]*[ ]?)"
+	local opts_exp "(,[ ]*([a-zA-Z]+([ ]|\(([a-zA-Z0-9_.\* ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+\)[ ]?|))+)?"
+		
+	local regex_model "`model_exp'`opts_exp'"
+	
+	if regexm(`"`input_string'"', `"`regex_scale'"') {
+		local namelist `= regexs(0)'
+		local input_string = trim(subinstr(`"`input_string'"', `"`namelist'"', "", 1))
+		
+		sreturn local namelist "`namelist'"
+	}
+	
+	local count = 1
+	while regexm(`"`input_string'"', `"`regex_model'"') {
+		local expression `= regexs(0)'
+		local input_string = trim(subinstr(`"`input_string'"', `"(`expression')"', "", .))
+		sreturn local ovar`count' `=regexs(0)'
+		local ++count
+		
+	}
+end
+
+capture program drop _parse_ovar_model
+program define _parse_ovar_model, sclass
+	
+	args model
+	
+	noi di "`model'"
+	
+	gettoken eq opts: model, parse(",")
+	local ovar `:word 1 of `eq''
+	local ovar = trim("`ovar'")
+	
+	gettoken left covs: eq
+	local covs = trim("`covs'")
+	
+	gettoken right opts: opts, parse(",")
+	local opts = trim("`opts'")
+	
+	if regexm("`opts'", "omit\(([a-zA-Z0-9_.\* ]+)\)") {
+		local omitOpt `=regexs(0)'
+		local omitVars `=regexs(1)'
+	}
+	
+	if regexm("`opts'", "include\((([a-zA-Z0-9_.\* ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+)\)") {
+		local includeOpt `=regexs(0)'
+		local includeVars `=regexs(1)'
+		noi di "`includeVars'"
+		
+	}
+	
+	local remaningOpts = trim(subinstr("`opts'", "`includeOpt'","", .))
+	local remaningOpts = trim(subinstr("`remaningOpts'", "`omitOpt'","", .))
+		
+	* noi di "`omitOpt'"
+	* noi di "`includeOpt'"
+	
+	sreturn local depv "`ovar'"
+	sreturn local covs "`covs'"
+	sreturn local opts "`opts'"
+	sreturn local includeVars "`includeVars'"
+	sreturn local omitVars "`omitVars'"
+	sreturn local remaningOpts "`remaningOpts'"
+	
+	
+	* noi di "`includeVars'"
+	* noi di "`ovar'"
+	* noi di "`covs'"
+	* noi di "`opts'"
+	
+end
+
+/*
 *** Parses input anything 
 capture program drop _input_parser
 program define _input_parser, sclass
@@ -904,6 +1039,7 @@ program define _input_parser, sclass
 	}
 end
 
+
 *** Parser of sadv_models
 capture program drop _parse_ovar_model
 program define _parse_ovar_model, sclass
@@ -928,6 +1064,8 @@ program define _parse_ovar_model, sclass
 	if regexm("`opts'", "include\((([a-zA-Z0-9_. ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+)\)") {
 		local includeOpt `=regexs(0)'
 		local includeVars `=regexs(1)'
+		noi di "`includeVars'"
+		
 	}
 	
 	local remaningOpts = trim(subinstr("`opts'", "`includeOpt'","", .))
@@ -950,7 +1088,7 @@ program define _parse_ovar_model, sclass
 	* noi di "`opts'"
 	
 end
-
+*/
 
 *** Creates the mean/sum score syntax for include()
 capture program drop _meanSumInclude
