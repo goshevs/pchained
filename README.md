@@ -23,16 +23,16 @@ To load `pchained`, include the following line in your do file:
 qui do "https://raw.githubusercontent.com/goshevs/pchained/master/pchained.ado"
 ```
 
-<br>
-
 What's new in this release?
 ---
 
-** Critical changes **
+**Critical changes**
+
 Option `scalecov` has been replaced with option `comcov`. Syntax remains unchanged.
 Please, update your scripts to reflect this critical change.
  
-** Added functionality **
+**Added functionality**
+
 The following functionality was added to `pchained`:
 
 - Impute subject to conditions. See options `CONDImputed` and `CONDComplete`
@@ -40,11 +40,11 @@ The following functionality was added to `pchained`:
 See option `full` for futher details.
 - Wildcards (i.e. `*`) can now be used in variable lists
 
-** Retired functionality **
+**Retired functionality**
 
 None at this time.
 
-<br>
+
 
 Syntax
 ---
