@@ -14,7 +14,7 @@
 *** Timevar      = time/wave identifier
 *** CONTinous    = stub names of scales whose items should be treated as continuous
 *** SCOREtype    = mean score (default) or sum score
-*** SCALECOVars  = list of covariates used for scale imputation, supports factor variable syntax 
+*** COMCOVars    = list of covariates used for scale and stand-alone variable imputation, supports factor variable syntax 
 *** ADDSADepvars = list of stand-alone varaibles to be imputed together with the scale items
 *** MIOptions    = mi impute chained options to be passed on (by() is also allowed)
 *** CATCutoff    = max number of categories/levels to classify as categorical; if fails --> classified as continuous
@@ -27,7 +27,7 @@
 *D** CONDImputed  = 
 *D** CONDComplete = 
 *D** SCALEInclude = 
-*D** SCALE = 
+*D** SCALEOmit    = 
 *** FULLscales   = by-passing Plumpton
 *** debug        = undocumented option: interrupts execution after reshape
 *** USELabels    = use labels of item/scale if exist to classify items 	(not in use)
@@ -42,7 +42,7 @@ program define pchained, eclass
 
 	syntax anything [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
 						      [CONTinous(namelist) SCOREtype(string asis) ///
-						       SCALECOVars(varlist fv) SCALEInclude(string asis) ///
+						       COMCOVars(varlist fv) SCALEInclude(string asis) ///
 							   SCALEOmit(string asis) ADDSADepvars(varlist) /// 
 							   MIOptions(string asis) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
@@ -136,6 +136,8 @@ program define pchained, eclass
 		* noi di "`userDefCont'"
 		
 		*** Get the union of scalecovars, miCovVars and miIncVars
+		local scalecovars "`comcovars'" // remapping of input local
+		fvunab scalecovars: `scalecovars' 
 		local allcovars "`scalecovars' `miCovVars'"   // `miIncVars'"
 		local allcovars: list uniq allcovars
 		
@@ -538,12 +540,19 @@ program define pchained, eclass
 
 		
 		*** If covariates and weights are (not) provided
+		local covars_wide ""
 		if "`scalecovars'" ~= "" {
 			*** Build list of covariates in wide format
 			foreach cov of local scalecovars {
-				fvunab mycov: `cov'*
-				local covars_wide "`covars_wide' `mycov'"
+				fvunab mycov: `cov'*	
+				foreach cvar of local mycov {
+					if !`:list cvar in covars_wide' {
+						local covars_wide "`covars_wide' `mycov'"
+					}
+				}
 			}
+			
+			* noi di "`scalecovars'"
 			* noi di "`covars_wide'"
 			
 			*** write out the exogenous vars and mi options
@@ -618,7 +627,7 @@ program define pchained, eclass
 					}	
 				}
 				
-				noi di "`miCovWide'"
+				* noi di "`miCovWide'"
 				
 				* noi di "`miCovVar'"
 				* noi di "`miOmitVars'"
@@ -935,7 +944,7 @@ program define _input_parser, sclass
 	sreturn clear
 	
 	local regex_scale "^[a-zA-Z0-9_ ]+"
-	local model_exp "([a-zA-Z0-9_]+[a-zA-Z0-9_. ]*[ ]?)"
+	local model_exp "([a-zA-Z0-9_]+[a-zA-Z0-9_.\* ]*[ ]?)"
 	local opts_exp "(,[ ]*([a-zA-Z]+([ ]|\(([a-zA-Z0-9_.\* ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+\)[ ]?|))+)?"
 		
 	local regex_model "`model_exp'`opts_exp'"

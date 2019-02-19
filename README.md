@@ -10,7 +10,8 @@ Introduction
 ---
 
 This is a new Stata command which implements Plumpton-type 
-chained imputation of scales using `mi impute chained` (Plumpton, 2016).
+chained imputation of scales using `mi impute chained` (Plumpton, 2016). Users can
+also bypass the Plumpton-type imputation technique and impute on full sets of scale items.
 
 
 Installation
@@ -29,7 +30,7 @@ Syntax
 ```
 pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(varname)
 					   [CONTinous(namelist) SCOREtype(string asis) ///
-						SCALECOVars(varlist fv) SCALEInclude(string asis) ///
+						COMCOVars(varlist fv) SCALEInclude(string asis) ///
 						SCALEOmit(string asis) ADDSADepvars(varlist) /// 
 						MIOptions(string asis) CATCutoff(integer 10) ///
 						MINCsize(integer 0) MERGOptions(string asis) ///
@@ -45,7 +46,7 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 
 | argument       | description            |
 |----------------|------------------------|
-| *scale_stubs*  | unique stub names of the scale(s) to be imputed (takes multiple scales); can be omitted if at least one `sadv_models` is defined (Sarah Jensen's discovery!) |
+| *scale_stubs*  | unique stub names of the scale(s) to be imputed (takes multiple scales); can be omitted if at least one `sadv_models` is defined (thanks go to Sarah Jensen's for discovering this unintended feature!) |
 | *Ivar*         | unique cluster/panel identifier (i.e. person, firm, country id) |
 | *Timevar*      | time/wave identifier |
 
@@ -59,7 +60,7 @@ pchained scale_stubs [sadv_models] [if] [in] [weight], Ivar(varlist) Timevar(var
 | *CONTinous*    | stub names of scales whose items should be treated as continuous |
 | *SCOREtype*    | mean score or sum score |
 |                | default: `mean` |
-| *SCALECOVars*  | list of covariates to be included in the scale item imputatation models, supports factor variable syntax  |
+| *COMCOVars*    | covariates included in the scale item and stand-alone variable imputatation models, supports factor variable syntax |
 | *SCALEInclude* |  TODO |
 | *SCALEOmit*    |  TODO |
 | *ADDSADepvars* | list of stand-alone variables to be included in the scale item imputation equations; all periods of these variables are used in the imputation equation for an item |
@@ -104,7 +105,7 @@ The arguments that a model in `sadv_models` takes are:
 
 - `depvar`: the stand-alone variable to be imputed
 - `covariateList`: an optional list of covariates to be included in the imputation equation of `depvar`. If 
-`covariateList` is specified, `SCALECOVars` are excluded from the imputation model for `depvar`. 
+`covariateList` is specified, `comcovars` are excluded from the imputation model for `depvar`. 
 - `options`: could be any set of:
     - `include([other_sadv] [mean(scale_stubs)] [sum(scale_stubs)])`: allows 
 	the user to specify other stand-alone variables, `other_sadv`, as well as the types 
@@ -113,7 +114,7 @@ The arguments that a model in `sadv_models` takes are:
 	If `other_sadv` is specified, all periods of the stand-alone variables in `other_sadv` are used as
 	predictors in the imputation equation. If `mean` or `sum` is specified, the score for the
 	time period corresponding to the time period of `depvar` is included as a regressor 
-	- `omit(varlist)`: allows the user to remove covariates listed in `SCALECOVars` 
+	- `omit(varlist)`: allows the user to remove covariates listed in `comcovars` 
 	from the imputation equation for `depvar`; this options is ignored if `include` is specified
 	- `noimputed`: instructs Stata to remove all other imputed variables used as 
 	predictors in the imputation equation, except other time periods of `depvar` and 
@@ -138,7 +139,7 @@ where `condition` is either a standard Stata condition or a condition which invo
 Multiple conditions for multiple scales/stand-alone varibles can be specified. See section Examples for usage.
 
 To request conditional imputation, the user has to specify option `CONDImputed`. The option has the same syntax as 
-`CONDComplete` but the variables that are being conditioned on have to be imputed variables.
+`CONDComplete` but the variables that are being conditioned on must be imputed variables.
 
 An important requirement for imputation subject to conditions is to ensure "that missing 
 values of all conditioning variables [are] nested within missing values 
@@ -167,15 +168,15 @@ Examples
 
 *** Categorical items
 simdata 500 3
-pchained s1_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained s1_i, i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 *** Treat items as continuous
 simdata 200 3
-pchained s1_i, i(id) t(time) cont(s1_i) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained s1_i, i(id) t(time) cont(s1_i) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 *** Items continuous by design (imputation model defined by user)
 simdata 200 3
-pchained s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) /// 
+pchained s4_i, i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) /// 
                mod(s4_i = "pmm, knn(3)")
 
 
@@ -184,16 +185,16 @@ pchained s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(
 
 *** Categorical items
 simdata 500 3
-pchained s1_i s3_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
+pchained s1_i s3_i, i(id) t(time) comcov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
 
 
 *** Treat some scales as continuous
 simdata 500 3
-pchained s1_i s2_i, i(id) t(time) cont(s2_i) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained s1_i s2_i, i(id) t(time) cont(s2_i) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 *** Some scales/items continuous by design (imputation models defined by user)
 simdata 500 3
-pchained s2_i s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) ///
+pchained s2_i s4_i, i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) ///
                     mod(s2_i = "ologit" s4_i = "pmm, knn(3)")
 
 
@@ -202,36 +203,36 @@ pchained s2_i s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots r
 
 *** Categorical items
 simdata 500 3
-pchained s1_i s2_i s3_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
+pchained s1_i s2_i s3_i, i(id) t(time) comcov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
 
 
 *** Treat some scales as continuous
 simdata 500 3
-pchained s1_i s2_i s3_i, i(id) t(time) cont(s2_i) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained s1_i s2_i s3_i, i(id) t(time) cont(s2_i) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 
 *** Some scales/items continuous by design
 simdata 500 3
-pchained s1_i s3_i s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots)
+pchained s1_i s3_i s4_i, i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots)
 
 
 *** Mixed, s4_i by design is cont, s2_i user defined as cont
 simdata 500 3
-pchained s1_i s2_i s4_i, i(id) t(time) cont(s2_i) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained s1_i s2_i s4_i, i(id) t(time) cont(s2_i) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 
 ********************************************************************************
 ***   By group                                                               ***
 
 simdata 1000 3
-pchained s1_i s4_i, i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots by(group) rseed(123456))
+pchained s1_i s4_i, i(id) t(time) comcov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots by(group) rseed(123456))
 
 
 ********************************************************************************
 ***  Sampling Weight                                                         ***
 
 simdata 1000 3
-pchained s1_i s4_i [pw=weight], i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
+pchained s1_i s4_i [pw=weight], i(id) t(time) comcov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
 
 
 ********************************************************************************
@@ -240,19 +241,19 @@ pchained s1_i s4_i [pw=weight], i(id) t(time) scalecov(x1 i.x2 x3 y1) score(sum)
 *** 
 simdata 500 3
 pchained s1_i (y2, noimputed) (y3 i.yx x1 i.yz, include(y2 mean(s1_i))), ///
-	          i(id) t(time) scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) ///
+	          i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) ///
 			  mod(s1_i = "pmm, knn(3)" y2 = "regress" y3 = "regress")
 
 *** 		  
 simdata 500 3
 pchained s1_i (y2, include(y3 mean(s1_i)) omit(x1 i.x2)) (y3 i.yx x1 i.yz, include(y2 mean(s1_i))), ///
-	          i(id) t(time) scalecov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
+	          i(id) t(time) comcov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
 			  mod(y2 = "pmm, knn(3)" y3 = "regress")
 
 ***
 simdata 500 3
 pchained s1_i s2_i (y2, include(y3 mean(s1_i) sum(s2_i)) omit(x1 i.x2 y1)) (y3 i.yx x1 i.yz, include(y2 mean(s2_i))), ///
-	          i(id) t(time) scalecov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
+	          i(id) t(time) comcov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
 			  mod(y2 = "pmm, knn(3)" y3 = "regress")
 
 
@@ -264,9 +265,14 @@ pchained s1_i s2_i (y2, include(y3 mean(s1_i) sum(s2_i)) omit(x1 i.x2 y1)) (y3 i
 
 ***
 simdata 500 3
+
 bys id: gen x5_base = x5[1]
 
-*** ----->>>>>> Ensuring the nesting condition holds
+*************
+*** >>>>>>>
+*** The following is IMPORTANT as otherwise Stata will throw an error
+*** For details see README and the Stata Manual
+
 foreach var of varlist s5_i* {
 	replace `var' = -9999999 if x5_base < 0
 }
@@ -280,47 +286,30 @@ foreach var of varlist s6_i* {
 }
 
 drop mymiss mymean
-*** <<<<<<<----
 
+replace y5 = -9999999 if y4 < 0  // assign a large number that can be replaces with missing after imputation
+replace y6 = -9999999 if x5 < 0  // assign a large number that can be replaces with missing after imputation
+ 
+*** >>>>>>>
+*************
+	
 pchained s1_i s2_i s5_i s6_i ///
-			  (y2 i.x2, noimputed)  ///
-			  (y4 i.yx x1 i.yz x5, include(y2 mean(s1_i))) ///
-			  (y5 i.yx x1 i.yz x5 i.x2, include(y2 y4)) ///
-			  (y6 i.yx i.x2, noimputed), ///
-			  i(id) t(time) ///
-			  scalecov(x1 i.x2 x3 y1 x5_base) mio(add(1) chaindots rseed(123456)) ///
+			  (y2 x5*, noimputed)  ///
+			  (y4 i.yx i.yz x5, include(y2 mean(s1_i))) ///
+			  (y5 i.yx x1 i.yz x5 i.x2, include(y*)) ///
+			  (y6, noimputed omit(x*)), ///
+	          i(id) t(time) comcov(x1 i.x2 x3 y1 x5*) mio(add(1) chaindots rseed(123456)) ///
 			  mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)" ///
 				  y2 = "regress" y4 = "pmm, knn(3)" y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
-			  condc(s5_i = "if x5_base > -1") ///
-			  condi(s6_i = "if mean(s1_i) > 0")
-
+			  condc(s5_i = "if x5_base > -1" y6 = "if x5 >= 0") ///
+			  condi(s6_i = "if mean(s1_i) > 0" y5 = "if y4 > -1")
 			  
-*** 
-simdata 500 3
-
-*** ----->>>>>> Ensuring the nesting condition holds
-replace y5 = -9999999 if y4 < 0  
-replace y6 = -9999999 if x5 < 0  
-*** <<<<<<<----
-
-pchained s1_i s2_i ///
-			  (y2 x2, noimputed) ///
-			  (y4 i.yx x1 i.yz x5, include(y2 mean(s1_i))) ///
-			  (y5 i.yx x1 i.yz x5, include(y2 y4)) (y6 x2, noimputed), ///
-			  i(id) t(time) ///
-			  scalecov(x1 i.x2 x3 y1 x5) mio(add(1) chaindots rseed(123456)) ///
-			  mod(s1_i = "pmm, knn(3)" y2 = "regress" y4 = "pmm, knn(3)" ///
-			      y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
-			  condi(y5 = "if y4 > -1") ///
-			  condc(y6 = "if x5 >= 0")	  
-		
-		
 		
 ********************************************************************************
-***  Imputing on complete remaining scales (Plumpton bypass)                 ***
+***  Imputing on complete scales (Plumpton bypass)                 ***
 
 ***		
 simdata 500 3
-pchained s1_i s3_i, i(id) t(time) full scalecov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained s1_i s3_i, i(id) t(time) full comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
 
 ```
