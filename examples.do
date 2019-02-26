@@ -129,7 +129,7 @@ simdata 500 3
 bys id: gen x5_base = x5[1]
 
 *************
-*** >>>>>>>
+*** >>>>>>> Ensuring the nesting condition holds
 *** The following is IMPORTANT as otherwise Stata will throw an error
 *** For details see README and the Stata Manual
 

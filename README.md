@@ -23,7 +23,7 @@ To load `pchained`, include the following line in your do file:
 qui do "https://raw.githubusercontent.com/goshevs/pchained/master/pchained.ado"
 ```
 
-What's new in this release?
+What's new?
 ---
 
 **Critical changes**
@@ -39,10 +39,6 @@ The following functionality was added to `pchained`:
 - Impute on a full set of scale items rather on functions of items. 
 See option `full` for futher details.
 - Wildcards (i.e. `*`) can now be used in variable lists
-
-**Retired functionality**
-
-None at this time.
 
 
 
@@ -291,7 +287,7 @@ simdata 500 3
 bys id: gen x5_base = x5[1]
 
 *************
-*** >>>>>>>
+*** >>>>>>> Ensuring the nesting condition holds
 *** The following is IMPORTANT as otherwise Stata will throw an error
 *** For details see README and the Stata Manual
 

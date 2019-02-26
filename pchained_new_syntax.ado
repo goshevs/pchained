@@ -1,6 +1,6 @@
 * Plumpton with -mi impute chained-
 * Authors: Simo Goshev, Zitong Liu
-* Version: 0.5
+* Version: 1.0
 *
 *
 *
@@ -41,55 +41,20 @@ capture program drop pchained
 program define pchained, eclass
 
 	syntax anything [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
-						      [CONTinous(namelist) SCOREtype(string asis) ///
-						       COMCOVars(varlist fv) SCALEInclude(string asis) ///
-							   SCALEOmit(string asis) ADDSADepvars(varlist) /// 
+						      [CONTinous(namelist) ///
 							   MIOptions(string asis) CATCutoff(integer 10) ///
 						       MINCsize(integer 0) MERGOptions(string asis) ///
 							   MODel(string asis) CONDImputed(string asis) ///
-							   CONDComplete(string asis) FULLscales ///
+							   CONDComplete(string asis) COMMONcov(string asis) ///
 							   SAVEmidata(string) PRINTmodel suspend debug] // USELABels
 
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
 	qui {
-				
-		*** Save original data
-		tempfile originaldata
-		save "`originaldata'", replace
 		
-		*** limit sample to user specified
-		marksample touse
-		drop if !`touse' 
+		************************************************************************
+		**** Specification of defaults
 		
-		*** Parse the anything string
-		_input_parser "`anything'"
-		
-		*** collect scale stub names
-		local namelist "`s(namelist)'" 
-		
-		*** collect variables that require imputation, their covariates and included vars
-		local extraModels = 1
-		local miDepVarsOriginal ""
-		local miCovVars ""
-		while `"`s(ovar`extraModels')'"' ~= "" {
-			_parse_ovar_model "`s(ovar`extraModels')'"
-			local miDepVarsOriginal "`miDepVarsOriginal' `s(depv)'"
-			local miCovVars "`miCovVars' `s(covs)'"
-			local ++extraModels
-		}
-		
-		*** Collect all variables from scaleinclude
-		if `"`scaleinclude'"' ~= "" {
-			_parse_scaleCustomize `"`scaleinclude'"' "incl"
-			noi sreturn list
-			local scaleIncl "`s(scalesAllCovs)'" 
-		}
-		
-		* noi di "`miDepVars'"
-		* noi di "`miCovVars'"
-		
-		**** Specification of default values
 		*** Default scoretype to mean
 		if "`scoretype'" == "" local scoretype "mean"
 
@@ -112,209 +77,223 @@ program define pchained, eclass
 			local mergoptions ", `mergoptions'"
 		}
 	
-		*** Collect all items of all scales for reshape
-		local allitemsrs ""  // collection of all items (renamed for reshape)
-		foreach scale of local namelist {  // loop over scales
-			capture unab myitems: `scale'*
-			*** check whether elements of namelist are variables
-			if (_rc != 0) {
+	
+		************************************************************************
+		**** Data and sample
+	
+		*** Save original data
+		tempfile originaldata
+		save "`originaldata'", replace
+		
+		*** Constrain sample to user-specified
+		marksample touse
+		drop if !`touse' 
+		
+		
+		************************************************************************
+		**** Preliminary parsing to identify and collect inputs; checks
+		
+		*** Parse the anything string
+		_parseAnything "`anything'"
+		
+		*** Preliminary scan of models to identify types of inputs		
+		local miScale ""       // scales
+		local miSadv  ""       // stand-alone variables
+		local miModelCovs ""   // covariates included in the models
+		
+		local i = 1
+		while `"`s(model`i')'"' ~= "" {
+			*** Parse the model
+			_parseModels "`s(model`i')'"
+			
+			*** Check if dvar is a scale or sadv
+			local remainingOpts "`s(remaningOpts)'"
+			if `:list posof "scale" in remainingOpts' ~= 0 {
+				local miScale "`=trim("`miScale' `s(depv)'")'"
+			}
+			else {
+				local miSadv "`=trim("`miSadv' `s(depv)'")'"
+			}
+			local miModelCovs "`=trim(stritrim("`miModelCovs' `s(covs)'"))'"
+			local ++i
+		}
+		
+		*** Model inputs are identified
+		noi di "Scales: `miScale'"
+		noi di "SADvariables: `miSadv'"
+		noi di "Model covariates: `miModelCovs'"
+	
+	
+		*** Covariate collection
+		
+		*** Collect all covariates and check for duplication and miss-specification
+		fvunab allCovs: `commoncov' 
+		local allCovs "`allCovs' `miModelCovs'"
+		local allCovs: list uniq allCovs
+		
+		noi di "Full set of covariates: `allCovs'"
+
+		*** <><><> Check for duplication (factor vs non-factor)
+		fvrevar `allCovs', list
+		local covarCheck "`r(varlist)'"
+		
+		local listUnique: list uniq covarCheck  // 
+		noi di "List of unique covariates: `listUnique'"
+		local myTest: list covarCheck - listUnique
+
+		if "`myTest'" ~= "" {
+			fvrevar `myTest', list
+			local myTest "`r(varlist)'"
+			noi di in r "Variables `myTest' specified inconsistently across equations"
+			exit 489
+		}
+		
+	
+		************************************************************************
+		**** Pre-processing for reshape
+
+		*** >>>  SCALES
+		
+		*** Collecting and renaming items across all scales for reshape
+		local scaleItemsRS ""
+		foreach scale of local miScale {  // loop over scales
+			capture unab myItems: `scale'*
+			
+			*** Check whether elements of myItems are variables
+			if _rc {
 				di in r "Stub `scale' is not associated with a scale (does not identify a set of variables in the dataset)"
 				exit 111
 			}
-			*** rename variables in dataset and in the locals to facilitate reshape
-			foreach item of local myitems {
-				local allitemsrs "`allitemsrs' `item'_`timevar'" // may break if too many items
+			
+			*** Rename items in dataset and in the locals to facilitate reshape
+			foreach item of local myItems {
+				local scaleItemsRS "`scaleItemsRS' `item'_`timevar'"
 				ren `item' `item'_`timevar'
-			} // End loop over myitems_i
+			}
 						
 			**** Feed in variable type information
-			local isCont: list scale in continous
+			local isCont: list scale in continous   // check if user wants the items to be treated as continuous
 			if `isCont' == 1 { 
 				local userDefCont "`userDefCont' `scale'"
 			} 
 		}
-		* noi di "`userDefCont'"
-	
-				
-		*** Get the union of scalecovars, miCovVars and miIncVars
-		local scalecovars "`comcovars'" // remapping of input local
-		fvunab scalecovars: `scalecovars' 
-		local allcovars "`scalecovars' `miCovVars' `scaleIncl'"  // `miIncVars'"
-		local allcovars: list uniq allcovars
+		**** Scale items have been renames in the dataset and in the reshape local
 		
-		******* it is possible that there are repeats of covariates (some are entered as factor vars and others are not)
-		* noi di "`allcovars'"
-		******* check for that and flag to user
-		fvrevar `allcovars', list
-		local covarCheck "`r(varlist)'"
-		local getUnique: list uniq covarCheck
-		noi di "`getUnique'"
-		local myTest: list covarCheck - getUnique
-		* noi di "`myTest'"
-		if "`myTest'" ~= "" {
-			fvrevar `myTest', list
-			local myTest "`r(varlist)'"
-			noi di in r "Variables `myTest' specified inconsistently across equations. Please, fix syntax"
-			exit 489
-		}
-		local allcovars: list allcovars - miDepVarsOriginal
+		*** >>> SADV	
 		
-		*** rename depVars to facilitate reshape
-		local miDepVars ""
-		foreach dVar of local miDepVarsOriginal {
-			local miDepVars "`miDepVars' `dVar'_`timevar'" // may break if too many items
-			ren `dVar' `dVar'_`timevar'
+		*** Collecting and renaming sadv's for reshape
+		local miSadvRS ""
+		foreach var of local miSadv {
+			local miSadvRS "`miSadvRS' `var'_`timevar'"
+			ren `var' `var'_`timevar'
 		}
 		
-						
-		*** Prepare all covariates for reshape
-		if "`allcovars'" ~= "" {
+		*** >>> COVARIATES
 
+		if "`allCovs'" ~= "" {  // if covariates are specified
 			*** Extract covariate names from covariate list (which may be fvvarlist)
-			fvrevar `allcovars', list
-			local covarsrs "`r(varlist)'"
-			local covarsrs: list uniq covarsrs
+			fvrevar `allCovs', list
+			local covars "`r(varlist)'"
 			
-			* noi di "`covarsrs'"
+			*** Obtain a list of unique names
+			local covars: list uniq covars  // use for checking conditions
 		
 			*** Separate time invariant from time variant covariates
-			local cov_invar ""
-			local cov_var ""
-			foreach covar of local covarsrs {
+			local covInvar ""
+			local covVar ""
+			foreach covar of local covars {
 				tempvar mytest
 				sort `ivar' `timevar'
 				bys `ivar': egen `mytest' = mean(`covar')
+				
 				capture assert `mytest' == `covar'
-				if (_rc ~= 0) {
-					local cov_var "`cov_var' `covar'"
+				if _rc {
+					local covVar "`covVar' `covar'"
 				}
 				else {
-					local cov_invar "`cov_invar' `covar'"
+					local covInvar "`covInvar' `covar'"
 				}
 			}	
 		
 			*** Report covariates
 			noi di _n in y "********************************************************"
 			noi di in y "Covariates: "
-			noi di in y "    Time-invariant: `cov_invar'"
-			noi di in y "    Time-variant  : `cov_var'"
-			noi di "********************************************************"		
+			noi di in y "    Time-invariant: `covInvar'"
+			noi di in y "    Time-variant  : `covVar'"
+			noi di "********************************************************"	
+			
+			
+			*** Rename time variant covariates to facilitate reshape
+			local covVarRS ""
+			foreach cv of local covVar {
+				ren `cv' `cv'_`timevar'
+				local covVarRS "`covVarRS' `cv'_`timevar'"
+			}
+		
+			*** Create a list for all covariates (with new names) for reshape
+			local covarsRS "`covVarRS' `covInvar'"
+			
 		}
-		else {
+		else {  // if no covariates
 			noi di _n in y "********************************************************"
 			noi di in y "No covariates included in the imputation models "
 			noi di "********************************************************"		
 		}
 		
-		
-		*** Rename time variant covariates to facilitate reshape
-		local cov_var_rs ""
-		foreach cv of local cov_var {
-			ren `cv' `cv'_`timevar'
-			local cov_var_rs "`cov_var_rs' `cv'_`timevar'"
-		}
-		
-		*** Create a list for all covariates (with new names) for reshape
-		local covarsrs_rs "`cov_var_rs' `cov_invar'"
-		
-		*** Prepare conditions for reshape
-		_parse_condition `"`condimputed'"'
-		
-		* noi di "`allitemsrs'"
-		
-		*** Identify variables
-		*** collect all left and right sides
-		local lSide ""
-		local rSide ""
-		foreach el in `:s(macros)' {
-			if regexm("`el'", "^ifL_.+") {
-				local match "`s(`=regexs(0)')'"
-				if regexm("`match'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
-					local condScale "`=regexs(2)'"
-					local inNamelist: list namelist & condScale
-					if "`inNamelist'" == "" {
-						noi di in r "Scale in conditional imputation is not present in the model"
-						exit 489
-					}
-					/*
-					else {
-						*** do something"
-					}
-					*/
-				}
-				else {
-					local lSide "`lSide' `match'" // adding variable to list
-				}		
-			}
-			else if regexm("`el'", "^ifR_.+") {
-				local match "`s(`=regexs(0)')'"
-				if regexm("`match'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
-					local condScale "`=regexs(2)'"
-					noi di "`namelist'"
-					local inNamelist: list namelist & condScale
-					if "`inNamelist'" == "" {
-						noi di in r "Scale in conditional imputation is not present in the model"
-						exit 489
-					}
-					/*
-					else {
-						*** do something"
-					}
-					*/
-				}
-				else {
-					local rSide "`rSide' `match'"
-				}
-			}
-		}
-		
-		*** Separates variables in the dataset from other stuff
-		local vars "`lSide' `rSide'"
-		local condVars ""
-		foreach i of local vars {
-			capture unab test: `i'
-			if _rc  == 0 {
-				*** Add to variable list
-				local condVars "`condVars' `i'"
-			}
-		}
-		
-		local condVars: list uniq condVars  // remove repeats
+		* noi di "Covariates for reshape: `covarsRS'"
+		*** All covariates are ready for reshape
 		
 		
-		*** Check whether cond vars are already present in the list of other vars
-		local checkCondVar: list condVars & miDepVarsOriginal
-		local checkCondVar: list condVars - checkCondVar
-		
-		* noi di "`checkCondVar'"
-		* noi di "`condVars'"
-		* noi di "`miDepVarsOriginal'"
-		
-		if "`checkCondVar'" != "" {
-			noi di in r "Variable(s) `checkCondVar' in conditional imputation is(are) not included in the model"
-			exit 489
-		}
+		*** >>> TIMEVAR
 		
 		*** Collect the level of timevar
 		levelsof `timevar', local(timelevs)
+
 		
+		************************************************************************
+		*** <><><> Checking validity of inputs for imputation subject to conditions 
+		
+		*** Checking condimputed() for invalid inputs 
+		_isInModel `"`condimputed'"' "cImp" "`miScale'" "`miSadv'"
+		
+		*** Checking condcomplete() for invalid inputs
+		sreturn clear
+		_isInModel `"`condcomplete'"' "" "`miScale'" "`miSadv'" "`covars'"
+
+			
+		
+		************************************************************************
+		*** Subsetting the data to only variables used in the model
+
 		*** Keep only variables of interest	
-		keep `allitemsrs' `miDepVars' `covarsrs_rs' `ivar' `timevar' `byGroup' `exp'
+		keep `scaleItemsRS' `miSadvRS' `covarsRS' `ivar' `timevar' `byGroup' `exp'
 		
+		
+		************************************************************************
+		*** Reshaping the data
+			
 		*** Reshape to wide
 		noi di _n in y "Reshaping to wide..."
-		reshape wide `allitemsrs' `miDepVars' `cov_var_rs', i(`ivar') j(`timevar')
+		reshape wide `scaleItemsRS' `miSadvRS' `covVarRS', i(`ivar') j(`timevar')
 		order _all, alpha  // useful for debugging
+		*** We are imputing with data in WIDE form. 
 		
-		*** Undocumented feature, stop execution to debug after reshaping
+				*** Undocumented feature, stop execution to debug after reshaping
 		if ("`debug'" ~= "") {
 			noi di "Debugging suspension requested."
 			exit
 		}
 			
-			
-		** We are imputing with data in WIDE form. 
 
+		exit
+
+		
+		
+		
+		
+		
+		
+		
 		**** Parse MODel (get model and options)
 		if `"`model'"' ~= `""' {
 			* noi di `"`model'"'
@@ -933,414 +912,3 @@ program define pchained, eclass
 	
 end
 
-
-
-*** Parser of the user input with multiple arguments of the type
-*** (sc1="logit, augment" sc2="pmm") and variations
-
-capture program drop _parse_model
-program define _parse_model, sclass
-
-	args myinput type 
-
-	local nlistex "[a-zA-Z]+[,]?[a-zA-Z0-9\(\)= ]*"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
-
-	while regexm(`"`myinput'"', `"`strregex'"') {
-		local scale `=regexs(0)'
-		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
-		gettoken sname model_opts: scale, parse("=")
-		gettoken left model_opts: model_opts, parse("=")
-		local model_opts = trim(`"`model_opts'"')
-		local model_opts = subinstr(`"`model_opts'"', `"""',"",.)
-		local model_opts = subinstr(`"`model_opts'"', `"'"',"",.)
-		local sname = trim("`sname'")
-		* noi di "`sname'"
-		*** Post result
-		sreturn local `sname'`type' `model_opts'
-	}
-end
-
-*** Compare elements of lists and print elements that differ
-capture program drop compare_lists
-program define compare_lists, sclass
-	args list1 list2
-	
-	local isect: list list1 & list2
-	local union: list list1 | list2
-	local lDiff: list union - isect // LONGER SHOULD BE FIRST!
-	* di "`lDiff'"
-	sreturn local differences `lDiff'
-
-end
-
-
-capture program drop _input_parser
-program define _input_parser, sclass
-
-	args input_string
-	
-	sreturn clear
-	
-	local regex_scale "^[a-zA-Z0-9_ ]+"
-	local model_exp "([a-zA-Z0-9_]+[a-zA-Z0-9_.\* ]*[ ]?)"
-	local opts_exp "(,[ ]*([a-zA-Z]+([ ]|\(([a-zA-Z0-9_.\* ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+\)[ ]?|))+)?"
-		
-	local regex_model "`model_exp'`opts_exp'"
-	
-	if regexm(`"`input_string'"', `"`regex_scale'"') {
-		local namelist `= regexs(0)'
-		local input_string = trim(subinstr(`"`input_string'"', `"`namelist'"', "", 1))
-		
-		sreturn local namelist "`namelist'"
-	}
-	
-	local count = 1
-	while regexm(`"`input_string'"', `"`regex_model'"') {
-		local expression `= regexs(0)'
-		local input_string = trim(subinstr(`"`input_string'"', `"(`expression')"', "", .))
-		sreturn local ovar`count' `=regexs(0)'
-		local ++count
-		
-	}
-end
-
-capture program drop _parse_ovar_model
-program define _parse_ovar_model, sclass
-	
-	args model
-	
-	noi di "`model'"
-	
-	gettoken eq opts: model, parse(",")
-	local ovar `:word 1 of `eq''
-	local ovar = trim("`ovar'")
-	
-	gettoken left covs: eq
-	local covs = trim("`covs'")
-	
-	gettoken right opts: opts, parse(",")
-	local opts = trim("`opts'")
-	
-	if regexm("`opts'", "omit\(([a-zA-Z0-9_.\* ]+)\)") {
-		local omitOpt `=regexs(0)'
-		local omitVars `=regexs(1)'
-	}
-	
-	if regexm("`opts'", "include\((([a-zA-Z0-9_.\* ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+)\)") {
-		local includeOpt `=regexs(0)'
-		local includeVars `=regexs(1)'
-		noi di "`includeVars'"
-		
-	}
-	
-	local remaningOpts = trim(subinstr("`opts'", "`includeOpt'","", .))
-	local remaningOpts = trim(subinstr("`remaningOpts'", "`omitOpt'","", .))
-		
-	* noi di "`omitOpt'"
-	* noi di "`includeOpt'"
-	
-	sreturn local depv "`ovar'"
-	sreturn local covs "`covs'"
-	sreturn local opts "`opts'"
-	sreturn local includeVars "`includeVars'"
-	sreturn local omitVars "`omitVars'"
-	sreturn local remaningOpts "`remaningOpts'"
-	
-	
-	* noi di "`includeVars'"
-	* noi di "`ovar'"
-	* noi di "`covs'"
-	* noi di "`opts'"
-	
-end
-
-/*
-*** Parses input anything 
-capture program drop _input_parser
-program define _input_parser, sclass
-
-	args input_string
-	
-	sreturn clear
-	
-	local regex_scale "^[a-zA-Z0-9_ ]+"
-	local model_exp "([a-zA-Z0-9_]+[a-zA-Z0-9_. ]*[ ]?)"
-	local opts_exp "(,[ ]*([a-zA-Z]+([ ]|\(([a-zA-Z0-9_. ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+\)[ ]?|))+)?"
-		
-	local regex_model "`model_exp'`opts_exp'"
-	
-	if regexm(`"`input_string'"', `"`regex_scale'"') {
-		local namelist `= regexs(0)'
-		local input_string = trim(subinstr(`"`input_string'"', `"`namelist'"', "", 1))
-		
-		sreturn local namelist "`namelist'"
-	}
-	
-	local count = 1
-	while regexm(`"`input_string'"', `"`regex_model'"') {
-		local expression `= regexs(0)'
-		local input_string = trim(subinstr(`"`input_string'"', `"(`expression')"', "", .))
-		sreturn local ovar`count' `=regexs(0)'
-		local ++count
-		
-	}
-end
-
-
-*** Parser of sadv_models
-capture program drop _parse_ovar_model
-program define _parse_ovar_model, sclass
-	
-	args model
-		
-	gettoken eq opts: model, parse(",")
-	local ovar `:word 1 of `eq''
-	local ovar = trim("`ovar'")
-	
-	gettoken left covs: eq
-	local covs = trim("`covs'")
-	
-	gettoken right opts: opts, parse(",")
-	local opts = trim("`opts'")
-	
-	if regexm("`opts'", "omit\(([a-zA-Z0-9_. ]+)\)") {
-		local omitOpt `=regexs(0)'
-		local omitVars `=regexs(1)'
-	}
-	
-	if regexm("`opts'", "include\((([a-zA-Z0-9_. ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+)\)") {
-		local includeOpt `=regexs(0)'
-		local includeVars `=regexs(1)'
-		noi di "`includeVars'"
-		
-	}
-	
-	local remaningOpts = trim(subinstr("`opts'", "`includeOpt'","", .))
-	local remaningOpts = trim(subinstr("`remaningOpts'", "`omitOpt'","", .))
-		
-	* noi di "`omitOpt'"
-	* noi di "`includeOpt'"
-	
-	sreturn local depv "`ovar'"
-	sreturn local covs "`covs'"
-	sreturn local opts "`opts'"
-	sreturn local includeVars "`includeVars'"
-	sreturn local omitVars "`omitVars'"
-	sreturn local remaningOpts "`remaningOpts'"
-	
-	
-	* noi di "`includeVars'"
-	* noi di "`ovar'"
-	* noi di "`covs'"
-	* noi di "`opts'"
-	
-end
-*/
-
-*** Creates the mean/sum score syntax for include()
-capture program drop _meanSumInclude
-program define _meanSumInclude, sclass
-
-	args mylist scoretype timevar timelevs
-
-	local include_items ""
-	
-	* noi di "`mylist'"
-	* noi di "`timelevs'"
-	
-	foreach scale of local mylist {
-		unab myitems: `scale'*
-		* noi di "`myitems'"
-		foreach tlev of local timelevs {
-			local taggregs ""
-			foreach item of local myitems {	
-				if regexm("`item'", "^`scale'[a-zA-Z0-9_]*_`timevar'`tlev'$") {
-					local taggregs "`taggregs' `=regexs(0)'"
-				}
-			}
-			* noi di "`taggregs'"	
-			*** This is where we write out the functions
-			local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
-			if "`scoretype'" == "sum" {
-				local include_items "`include_items' (`mysum')"
-			}	
-			else if "`scoretype'" == "mean" {
-				local nitems: word count `taggregs'	
-				local include_items "`include_items' (`mysum'/`nitems')"
-			}
-			else {
-				di in r "`scoretype' is not allowed as a score type"
-				exit 198
-			}
-		}
-	}
-	
-	sreturn local include_items "`include_items'"
-end
-
-
-*** Slice conditions
-capture program drop _parse_condition
-program define _parse_condition, sclass
-
-	args myinput type
-	
-	local nlistex "[a-zA-Z(-0-9)_\(\)<>~=\.\&\| ]+"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
-	local myvars "([a-zA-Z0-9_\(\) ]+)([<>~=]+)([a-zA-Z(-0-9)_\(\) ]+)(\|?\&?)" // [a-zA-Z0-9_]\|\&\.\(\)]+"
-	
-	*noi di `"`myinput'"'
-	*noi di "TEST 0"
-	
-	while regexm(`"`myinput'"', `"`strregex'"') {
-		local scale `=regexs(0)'
-		*noi di "TEST 1"
-		*noi di `"`scale'"'
-		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
-		gettoken sname cond: scale, parse("=")
-		gettoken left cond: cond, parse("=")
-		local cond = trim(`"`cond'"')
-		local cond = subinstr(`"`cond'"', `"""',"",.)
-		local cond = subinstr(`"`cond'"', `"'"',"",.)
-		local sname = trim("`sname'")
-		
-		*noi di "`sname'"
-		
-		*** parsing the if condition
-		local ifL "" // left side
-		local ifS "" // signs
-		local ifR "" // right side
-		local ifB "" // between
-		*noi di "`cond'"
-		
-		local mycond = regexr(`"`cond'"', "^[ ]*if[ ]+", "")
-		while regexm(`"`mycond'"', `"`myvars'"') {
-			local ifL "`ifL' `=regexs(1)'"
-			local ifR "`ifR' `=regexs(3)'"
-			local ifS "`ifS' `=regexs(2)'"
-			local ifB "`ifB' `=regexs(4)'"
-			local mycond = subinstr(`"`mycond'"', "`=regexs(0)'", "",.)
-			
-		}
-		
-		* noi di "`cond'"
-		* noi di "`ifB'"
-		
-		*** Post result
-		sreturn local cond`type'_`sname' `cond'
-		sreturn local ifL`type'_`sname' `=itrim("`ifL'")'
-		sreturn local ifR`type'_`sname' `=itrim("`ifR'")'
-		sreturn local ifS`type'_`sname' `"`=trim("`ifS'")'"'
-		sreturn local ifB`type'_`sname' `"`=trim("`ifB'")'"'
-	}
-end
-
-
-**** Rebuild conditions
-capture program drop _construct_conditions
-program define _construct_conditions, sclass
-	
-	args j timevar tp miDepVarsOriginal cov_invar cov_var
-	
-	if regexm("`j'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
-		local aggType "`=regexs(1)'"
-		unab fullItemList: `=regexs(2)'*
-		local timeItemList ""
-		foreach item of local fullItemList { // collect items for same time period
-			if regexm("`item'", ".+_`timevar'`tp'") {
-				local timeItemList `=itrim("`timeItemList' `item'")'
-			}
-		}
-		local sumItemList = subinstr("`timeItemList'", " ", "+", .)	
-		if ("`aggType'" == "mean") {
-			local len: word count `timeItemList'
-			local expr "((`sumItemList')/`len')"
-		}
-		else if ("`aggType'" == "sum") {
-			local expr "(`sumItemList')"
-		}
-	}
-	else {  // this is failing to pick up y2 as a var!
-		*noi di "`j'"
-		*noi di "`cov_invar'"
-		*noi di "`miDepVarsOriginal'"
-		
-		if ("`:list j in cov_invar'" == "1") { // check the stand-alone varlist and time invar covars
-			local expr "`j'"
-		}
-		else if ("`:list j in miDepVarsOriginal'" == "1") | ("`:list j in cov_var'" == "1") {
-			local expr "`j'_`timevar'`tp'"
-		}
-		else {
-			capture confirm number `j'
-			if _rc {
-				* noi di _n "`j'"
-				noi di in r "Value or variable `j' on the RHS of condition is invalid."
-				error 489
-			}
-			else {
-				local expr "`j'"
-			}
-		}
-	}
-	sreturn local expr "`expr'"
-end
-
-
-**** Slice and rebuild the conditional strings
-capture program drop _condimputation
-program define _condimputation, sclass
-
-	args condimputed scale depvar timevar miDepVarsOriginal cov_invar cov_var type
-	
-	noi _parse_condition `"`condimputed'"' "`type'"
-	*noi sreturn list
-	if regexm("`depvar'", "(.+)_`timevar'([0-9]+)$") {
-		local depvar "`=regexs(1)'"
-		local tp "`=regexs(2)'"
-	}
-	if "`scale'" ~= "" {   //bypass to accommodate scale vars
-		local depvar "`scale'"
-	}
-
-	if "cond_`depvar'" ~= "" {
-		local condLHS "`s(ifL`type'_`depvar')'"   
-		local condRHS "`s(ifR`type'_`depvar')'"
-		local wSigns "`s(ifS`type'_`depvar')'"
-		local bSigns "`s(ifB`type'_`depvar')'"
-	}
-
-	*** Rebuilding the conditions
-	local myCount = 1
-	local condImp ""
-	
-	*** Rebuilding LHS
-	foreach j of local condLHS {
-		*** Construct the LHS
-		noi _construct_conditions "`j'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'" "`cov_var'"
-		local lhsExpr `s(expr)'
-		
-		*** Rebuilding RHS
-		local right: word `myCount' of `condRHS'
-		noi _construct_conditions "`right'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'" "`cov_var'"
-		local rhsExpr `s(expr)'
-
-		*** Building the dependent variable-specific condition
-		local condImp `"`condImp' `lhsExpr' `:word `myCount' of `wSigns'' `rhsExpr' `:word `myCount' of `bSigns''"'
-		local ++myCount
-	}
-	if "`condImp'" ~= "" {
-		if "`type'" == ""  {
-			sreturn local condImp "cond(if`condImp')"
-		}
-		else {
-			sreturn local cond`type' "if`condImp'"
-		}
-	}
-	else {
-		sreturn local condImp ""
-		sreturn local cond`type' ""
-	}
-	
-end
