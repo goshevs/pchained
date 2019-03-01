@@ -182,6 +182,185 @@ program define _isInModel, sclass
 end
 
 
+*** Parser of MODel
+*** (sc1="logit, augment" sc2="pmm") and variations
+capture program drop _parseMODel
+program define _parseMODel, sclass
+
+	args myinput type 
+
+	local nlistex "[a-zA-Z]+[,]?[a-zA-Z0-9\(\)= ]*"
+	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
+
+	while regexm(`"`myinput'"', `"`strregex'"') {
+		local scale `=regexs(0)'
+		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
+		gettoken sname model_opts: scale, parse("=")
+		gettoken left model_opts: model_opts, parse("=")
+		local model_opts = trim(`"`model_opts'"')
+		local model_opts = subinstr(`"`model_opts'"', `"""',"",.)
+		local model_opts = subinstr(`"`model_opts'"', `"'"',"",.)
+		local sname = trim("`sname'")
+		* noi di "`sname'"
+		*** Post result
+		sreturn local `sname'`type' `model_opts'
+	}
+end
+
+
+capture program drop _scaleItemCategorization
+program define _scaleItemCategorization
+
+	args scale isContScale
+	
+	*** Specify temp names for scalars and matrices
+	tempname vals freqs pCats nCats   
+			
+	*** Check item type as well as capture and report constant items and rare categories
+
+	local bin  "" // binary items
+	local cat  "" // multiple category items
+	local cont "" // continuous items
+	
+	local finalScale ""   // admitted items
+	local constant ""        // constant items
+	local rare ""            // items with rare categories 
+	local cuscont ""		// Items designated as continous by user
+
+	*** Collect all items of the scale
+	unab myscale: `scale'*
+	
+	*** User assignment to continuous
+	local userOverride: list scale in isContScale // is scale in user-defined?
+	* noi di "Override: `userOverride'"
+	if (`userOverride' == 1) {
+		foreach item of local myscale {  //iterate over items of user-defined
+			capture tab `item', matrow(`vals')
+			if (_rc == 0) {  // if does not break
+				mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
+				if (`nCats' == 1)  {
+					local constant "`constant' `item'" 
+				}
+				else { 
+					local cuscont "`cuscont' `item'"  // add to customized continous vars
+					local finalScale "`finalScale' `item'"
+				}
+			}
+			else if (_rc == 134) {
+				local cuscont "`cuscont' `item'"  // add to customized continous vars
+				local finalScale "`finalScale' `item'"
+			}
+			else {
+				di in r "Cannot classify `item'"
+				exit 1000
+			}	
+		}
+	}
+	else {
+		*** Automatic assignment to all various types (may also have to look at the labels if they exist)
+		foreach item of local myscale {  //iterate over items of scales
+			
+			*** Retrieve label info if it exists ***
+			local labname: value label `item'
+			local labs ""
+			if "`labname'" ~= "" {
+				mata: values = .; text = ""
+				mata: st_vlload("`labname'", values, text); _transpose(values)
+				* mata: st_local("labs", invtokens(strofreal(values)))
+				mata: st_local("nCatsLab", strofreal(cols(values)))
+			}
+			
+			*** Observed values
+			capture tab `item', matrow(`vals') matcell(`freqs')
+			if (_rc == 0) {  // if does not break tab
+				mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
+
+/*
+				*** Giving labels precedence
+				if ("`uselabels'" ~= "") {  // user override for categories; use labels
+					if ("`nCatsLab'" ~= "") {
+						scalar `nCats' = `nCatsLab'
+					}
+					else {
+						di in r "No label exists for this item/scale."
+						exit 1000
+					}
+			}
+*/
+				* noi di `nCats'
+				if (`nCats'  < `catcutoff') {  // item is categorical
+					if (`nCats'  == 1)  {
+						local constant "`constant' `item'" 
+					}
+					else {  // more than 1 categories
+						mata: st_numscalar("`pCats'", colsum(mm_cond(st_matrix("`freqs'") :< `mincsize', 1,0))) // min # of obs per cat 
+						**** IMPORTANT Zitong's Note. This might be problematic because 
+						****   there may exists some "rare categories" while we have enough points for other categories. 
+						if (`pCats' > 0) {
+							local rare "`rare' `item'"
+						}
+						else {   // if not rare
+							if (`nCats' == 2) { // Binary
+								local bin "`bin' `item'"
+							}
+							else {  // Multi-category
+								local cat "`cat' `item'"
+							}
+							local finalScale "`finalScale' `item'"
+						}
+					}
+				} // end of if  
+				else { // item is continuous
+					local cont "`cont' `item'"
+					local finalScale "`finalScale' `item'" // Continous vars pass directly
+				}
+			} //end of _rc == 0
+			else if (_rc == 134)  { // item is continuous
+				local cont "`cont' `item'"
+				local finalScale "`finalScale' `item'" // Continous vars pass directly
+			}
+			else {
+				di in r "Cannot classify `item'"
+				exit 1000
+			}
+		} // end loop over items
+	} // end of else in userOverride
+	
+	* noi di "`finalScale'"
+	
+	*** Report results by scale
+	noi di _n "********************************************************" _n ///
+	"Summary of pre-imputation checks for scale `scale'*" _n  ///
+	"Constant items: `constant'" _n ///
+	"Binary items: `bin'" _n ///
+	"Multiple category items: `cat'" _n ///
+	"Continuous items: " _n ///
+	"      Auto detected: `cont'" _n ///
+	"      User defined : `cuscont'" _n ///
+	"Excluded items: " _n ///
+	"      Constant items: `constant'" _n ///
+	"      Categorical items with < `mincsize' obs in a category: `rare'"
+				
+	noi di in y _n "Filtered scale: `finalScale'"
+	noi di "********************************************************" _n
+	
+	sreturn local finalScale "`finalScale'"
+	sreturn local constant "`constant'"
+	sreturn local rare "`rare'"
+	sreturn local bin "`bin'"
+	sreturn local cuscont "`cuscont'" 
+	
+end
+
+
+
+
+
+
+
+
+
+
 exit
 
 
@@ -256,22 +435,6 @@ end
 		
 
 
-
-
-
-
-
-
-
-
-
-exit
-
-
-
-
-
-
 *** Parser of the user input with multiple arguments of the type
 *** (sc1="logit, augment" sc2="pmm") and variations
 
@@ -297,6 +460,22 @@ program define _parse_model, sclass
 		sreturn local `sname'`type' `model_opts'
 	}
 end
+
+
+
+
+
+
+
+
+
+
+exit
+
+
+
+
+
 
 *** Compare elements of lists and print elements that differ
 capture program drop compare_lists

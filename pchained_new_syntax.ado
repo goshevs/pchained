@@ -100,16 +100,23 @@ program define pchained, eclass
 		local miScale ""       // scales
 		local miSadv  ""       // stand-alone variables
 		local miModelCovs ""   // covariates included in the models
+		local allOutcomes ""
+		local isContScale ""   // has user specified that scale should be continuous?
 		
 		local i = 1
 		while `"`s(model`i')'"' ~= "" {
 			*** Parse the model
 			_parseModels "`s(model`i')'"
+
+			local allOutcomes "`allOtcomes' `s(depv)'"
 			
 			*** Check if dvar is a scale or sadv
 			local remainingOpts "`s(remaningOpts)'"
 			if `:list posof "scale" in remainingOpts' ~= 0 {
 				local miScale "`=trim("`miScale' `s(depv)'")'"
+				if regexm("`remainingOpts'", "cont|continuous") {
+					local isContScale "`=trim("`isContScale' `s(depv)'")'"
+				}
 			}
 			else {
 				local miSadv "`=trim("`miSadv' `s(depv)'")'"
@@ -119,18 +126,19 @@ program define pchained, eclass
 		}
 		
 		*** Model inputs are identified
+		noi di "All outcomes: `allOutcomes'"
 		noi di "Scales: `miScale'"
+		noi di "Continuous scales: `isContScale'"	
 		noi di "SADvariables: `miSadv'"
-		noi di "Model covariates: `miModelCovs'"
-	
-	
-		*** Covariate collection
+		noi di "Model covariates: `miModelCovs'"	
 		
+		*** Covariate collection
 		*** Collect all covariates and check for duplication and miss-specification
-		fvunab allCovs: `commoncov' 
-		local allCovs "`allCovs' `miModelCovs'"
+		fvunab commonCov: `commoncov' 
+		local allCovs "`commonCov' `miModelCovs'"
 		local allCovs: list uniq allCovs
 		
+		noi di "Common covariates: `commonCov'"
 		noi di "Full set of covariates: `allCovs'"
 
 		*** <><><> Check for duplication (factor vs non-factor)
@@ -170,12 +178,6 @@ program define pchained, eclass
 				local scaleItemsRS "`scaleItemsRS' `item'_`timevar'"
 				ren `item' `item'_`timevar'
 			}
-						
-			**** Feed in variable type information
-			local isCont: list scale in continous   // check if user wants the items to be treated as continuous
-			if `isCont' == 1 { 
-				local userDefCont "`userDefCont' `scale'"
-			} 
 		}
 		**** Scale items have been renames in the dataset and in the reshape local
 		
@@ -278,350 +280,51 @@ program define pchained, eclass
 		order _all, alpha  // useful for debugging
 		*** We are imputing with data in WIDE form. 
 		
-				*** Undocumented feature, stop execution to debug after reshaping
+		
+		*** <><><> Undocumented feature: stop execution to debug after reshaping
 		if ("`debug'" ~= "") {
 			noi di "Debugging suspension requested."
 			exit
 		}
-			
-
-		exit
-
 		
+		************************************************************************
+		*** Parsing option MODel
 		
-		
-		
-		
-		
-		
-		**** Parse MODel (get model and options)
 		if `"`model'"' ~= `""' {
 			* noi di `"`model'"'
-			_parse_model `"`model'"' "_model"  // gives s(`scale'_model)
+			_parseMODel `"`model'"' "_model"  // gives s(`scale'_model)
 		}
-		*noi sreturn list
+		* noi sreturn list
 		
-		*** Specify temp names for scalars and matrices
-		tempname vals freqs pCats nCats   
 		
-		foreach scale of local namelist {  // loop over scales
-			
-			*** Check item type as well as constant items and rare categories
-		
-			local bin  "" // binary items
-			local cat  "" // multiple category items
-			local cont "" // continuous items
-			
-			local finalScale ""   // admitted items
-			local constant ""        // constant items
-			local rare ""            // items with rare categories 
-			local cuscont ""		// Items designated as continous by user
-
-			*** Collect all items of the scale
-			unab myscale: `scale'*
-			
-			*** User assignment to continuous
-			local userOverride: list scale in userDefCont // is scale in user-defined?
-			* noi di "Override: `userOverride'"
-			if (`userOverride' == 1) {
-				foreach item of local myscale {  //iterate over items of user-defined
-					capture tab `item', matrow(`vals')
-					if (_rc == 0) {  // if does not break
-						mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
-						if (`nCats' == 1)  {
-							local constant "`constant' `item'" 
-						}
-						else { 
-							local cuscont "`cuscont' `item'"  // add to customized continous vars
-							local finalScale "`finalScale' `item'"
-						}
-					}
-					else if (_rc == 134) {
-						local cuscont "`cuscont' `item'"  // add to customized continous vars
-						local finalScale "`finalScale' `item'"
-					}
-					else {
-						di in r "Cannot classify `item'"
-						exit 1000
-					}	
-				}
-			}
-			else {
-				*** Automatic assignment to all various types (may also have to look at the labels if exist!)
-				foreach item of local myscale {  //iterate over items of scales
-					
-					*** Retrieve label info if it exists ***
-					local labname: value label `item'
-					local labs ""
-					if "`labname'" ~= "" {
-						mata: values = .; text = ""
-						mata: st_vlload("`labname'", values, text); _transpose(values)
-						* mata: st_local("labs", invtokens(strofreal(values)))
-						mata: st_local("nCatsLab", strofreal(cols(values)))
-					}
-					
-					*** Observed values
-					capture tab `item', matrow(`vals') matcell(`freqs')
-					if (_rc == 0) {  // if does not break tab
-						mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
-
-/*
-						*** Giving labels precedence
-						if ("`uselabels'" ~= "") {  // user override for categories; use labels
-							if ("`nCatsLab'" ~= "") {
-								scalar `nCats' = `nCatsLab'
-							}
-							else {
-								di in r "No label exists for this item/scale."
-								exit 1000
-							}
-					}
-*/
-						* noi di `nCats'
-						if (`nCats'  < `catcutoff') {  // item is categorical
-							if (`nCats'  == 1)  {
-								local constant "`constant' `item'" 
-							}
-							else {  // more than 1 categories
-								mata: st_numscalar("`pCats'", colsum(mm_cond(st_matrix("`freqs'") :< `mincsize', 1,0))) // min # of obs per cat 
-								**** IMPORTANT Zitong's Note. This might be problematic because 
-								****   there may exists some "rare categories" while we have enough points for other categories. 
-								if (`pCats' > 0) {
-									local rare "`rare' `item'"
-								}
-								else {   // if not rare
-									if (`nCats' == 2) { // Binary
-										local bin "`bin' `item'"
-									}
-									else {  // Multi-category
-										local cat "`cat' `item'"
-									}
-									local finalScale "`finalScale' `item'"
-								}
-							}
-						} // end of if  
-						else { // item is continuous
-							local cont "`cont' `item'"
-							local finalScale "`finalScale' `item'" // Continous vars pass directly
-						}
-					} //end of _rc == 0
-					else if (_rc == 134)  { // item is continuous
-						local cont "`cont' `item'"
-						local finalScale "`finalScale' `item'" // Continous vars pass directly
-					}
-					else {
-						di in r "Cannot classify `item'"
-						exit 1000
-					}
-				} // end loop over items
-			} // end of else in userOverride
-			
-			* noi di "`finalScale'"
-			
-			*** Report results by scale
-			noi di _n "********************************************************" _n ///
-			"Summary of pre-imputation checks for scale `scale'*" _n  ///
-			"Constant items: `constant'" _n ///
-			"Binary items: `bin'" _n ///
-			"Multiple category items: `cat'" _n ///
-			"Continuous items: " _n ///
-			"      Auto detected: `cont'" _n ///
-			"      User defined : `cuscont'" _n ///
-			"Excluded items: " _n ///
-			"      Constant items: `constant'" _n ///
-			"      Categorical items with < `mincsize' obs in a category: `rare'"
-						
-			noi di in y _n "Filtered scale: `finalScale'"
-			noi di "********************************************************" _n
-				
-		
-			*** create the expressions for --include-- from remaining scales 
-			local remaining = trim(subinstr("`namelist'", "`scale'","", .))
-			* noi di "`remaining'"
-			
-			local include_items ""
-		
-			if "`remaining'" ~= "" {   // if there are other scales
-				if "`fullscales'" == "" { //  if we have not requested full/complete scales
-					*** Compute aggregates by the levels of timevar
-					foreach remscale of local remaining {
-						unab myitems: `remscale'*
-						foreach tlev of local timelevs {
-							local taggregs ""
-							foreach item of local myitems {	
-								if regexm("`item'", "^`remscale'[a-zA-Z0-9_]*_`timevar'`tlev'$") {
-									local taggregs "`taggregs' `=regexs(0)'"
-								}
-							}
-							* noi di "`taggregs'"
-							*** This is where we write out the functions
-							local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
-							if "`scoretype'" == "sum" {
-								local include_items "`include_items' (`mysum')"
-							}	
-							else if "`scoretype'" == "mean" {
-								local nitems: word count `taggregs'	
-								local include_items "`include_items' (`mysum'/`nitems')"
-							}
-							else {
-								di in r "`scoretype' is not allowed as a score type"
-								exit 198
-							}
-						}
-					}
-					local include_items "`include_items'"
-				} // end of fullscales
-				else {
-					foreach remscale of local remaining {
-						unab myitems: `remscale'*
-						local include_items "`include_items' `myitems'"
-					}
-				}	
-			} // end of remaining
-			
-			*** Include variables specified in SCALEIncluded
-			if `"`scaleinclude'"' ~= "" {
-				 * noi di `"`scaleinclude'"'
-				_parse_scaleCustomize `"`scaleinclude'"' "incl" "`timevar'" "`cov_var'" "`cov_invar'"
-			}
-			local include_items "`include_items' `s(`scale'_cov_incl)'"
-			
-			noi di "`include_items'"
-			
-			*** adding any stand-alone variables to include
-			if ("`addsadepvars'" ~= "") {  // if stand-alone dep variable models are specified
-				foreach sadVar of local addsadepvars {
-					unab sadVars: `sadVar'_`timevar'*   // take all time periods of the var
-					foreach svar of local sadVars {
-						local include_items "`include_items' (`svar')" 
-					}
-				}
-			}
-			* no di "`finalScale'"
-			* no di "`include_items'"
-			* exit
-						
-			*** write out the imputation models for the scales
-			foreach depvar of local finalScale {
-				local rhs_imputed = trim(subinstr("`finalScale'", "`depvar'", "", .))
-				
-				***  incorporate conditional imputation into the imputation model, if provided
-				noi _condimputation `"`condimputed'"' "`scale'" "`depvar'" "`timevar'" "`miDepVarsOriginal'" "`cov_invar'"
-				local condImp "`s(condImp)'"
-
-				***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
-				noi _condimputation `"`condcomplete'"' "`scale'" "`depvar'" "`timevar'" "" "`cov_invar'" "`cov_var'" "Comp"
-				local condComp "`s(condComp)'"
-
-				*** Include imputed variables in parenthesis
-				local rhs_imputed_pr ""
-				foreach rhs of local rhs_imputed {
-					local rhs_imputed_pr "`rhs_imputed_pr' (`rhs')"
-				}
-
-				**** Note by Zitong: 
-				**** Give mtype 2 choice, manually overriding, and automatic way. 
-				**** continuous variable: regress (never try pmm, the Stata default realization of pmm always leads mistake). No augment
-				**** binary: logit. Use augment option
-				**** Ordered categorical variable: ologit, use augment option
-							
-				local userModel `"`s(`scale'_model)'"'
-				if (`"`userModel'"' == "") {
-					if `: list depvar in bin' {
-						local mymodel "`mymodel' (logit `condComp', noimputed augment include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
-					}
-					else if `: list depvar in cat' {
-						local mymodel "`mymodel' (ologit `condComp', noimputed augment include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
-					}
-					else {
-						local mymodel "`mymodel' (reg `condComp', noimputed include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "				
-					}
-				}
-				else {
-					if (regexm("`userModel'", ",[ ]*") == 0) {
-						local userModel "`userModel' `condComp', "
-					}
-					else {
-						local userModel "`=subinstr("`userModel'", ",", " `condComp',",1)'"
-					}
-					local mymodel "`mymodel' (`userModel' noimputed include(`include_items' `rhs_imputed_pr') `condImp') `depvar' "
-				}
-			} // end of loop over finalScale
-		}   // end of loop over scales
-
-		
-		*** If covariates and weights are (not) provided
-		local covars_wide ""
-		if "`scalecovars'" ~= "" {
-			*** Build list of covariates in wide format
-			foreach cov of local scalecovars {
-				fvunab mycov: `cov'*	
-				foreach cvar of local mycov {
-					if !`:list cvar in covars_wide' {
-						local covars_wide "`covars_wide' `mycov'"
-					}
-				}
-			}
-			
-			* noi di "`scalecovars'"
-			* noi di "`covars_wide'"
-			
-			*** write out the exogenous vars and mi options
-			
-			**** By Zitong: adding sampling weight. The syntax is a little bit lengthy but more clear 
-			if "`weight'" ~= "" {
-				local model_endpart "= `covars_wide' [`weight'=`exp'], `mioptions'"  // covars weight and mioptions
-			}
-			else {
-				local model_endpart "= `covars_wide', `mioptions'"	// covars , and mioptions			
-			}
-		}
-		else {
-			if "`weight'" ~= "" {
-				local model_endpart "[`weight'=`exp'], `mioptions'"  // weight, and mioptions
-			}
-			else {
-				local model_endpart ", `mioptions'" // Just mioptions			
-			} 
-		}	
-				
-		*** write out the imputation models for the miDepVars
-		* noi di "`miDepVars'"
-		* exit
-		
-		if ("`miDepVars'" ~= "") {
-			noi di _n "********************************************************" _n ///
+		noi di _n "********************************************************" _n ///
 			"Stand-alone dependent variables included in the imputation model:" _n ///
-			"      `miDepVarsOriginal'" 
+			"      `miSadv'" 
 			noi di "********************************************************" _n ///
-			
-			_input_parser "`anything'"
+					
+		if ("`allOutcomes'" ~= "") {
+			_parseAnything "`anything'"
 			
 			local iterModels = 1
-			while `"`s(ovar`iterModels')'"' ~= "" {
+			while `"`s(model`iterModels')'"' ~= "" {
 				*** parse the syntax of the model
-				_parse_ovar_model "`s(ovar`iterModels')'"
+				_parseModels "`s(model`iterModels')'"
 				* noi sreturn list
-				local miCovVar "`s(covs)'"     // covariates
-				local miIncVars "`s(includeVars)'"   // other depVars/means/sums of scales
-				local miOmitVars "`s(omitVars)'"       // omit
-				local miOpts "`s(remaningOpts)'"         // other options
+				local miCovVar "`s(covs)'"            // covariates
+				local miIncVars "`s(includeVars)'"    // other depVars/means/sums of scales
+				local miOmitVars "`s(omitVars)'"      // omit
+				local miOpts "`s(remaningOpts)'"      // other options
 				
 				* noi di "`miCovVar'"
 				* noi di "`miIncVars'"
 				
+				*** retrieve outcome
+				local outcome "`s(depv)'"
+				
 				*** retrieve the user supplied model
-				_parse_model `"`model'"' "_model"
-				local userModel `"`s(`s(depv)'_model)'"'
-				/*
-				if (regexm("`userModel'", ",[ ]*") == 0) {
-						local userModel "`userModel', "
-				}	
-				*/
-				*** collect all periods of the dependent variable
-				unab miDepVar: `s(depv)'_`timevar'*
-				
-				
+				_parseMODel `"`model'"' "_model"
+				local userModel `"`s(`outcome'_model)'"'
+
 				* noi di "`miDepVar'"
 				* noi di "`miIncVars'"
 				
@@ -662,8 +365,8 @@ program define pchained, eclass
 						local myOmitList "`myOmitList' `fullList'"
 					}
 					
-					*** Compare each covariate in scalecovs to the omitted list
-					foreach cvar of local covars_wide {
+					*** Compare each covariate in commoncov to the omitted list
+					foreach cvar of local covarsWide {
 						fvrevar `cvar', list
 						local myCovar "`r(varlist)'"
 						if `:list myCovar in myOmitList' {
@@ -675,12 +378,12 @@ program define pchained, eclass
 				* noi di "`miOmit'"
 				* noi di "`miCovWide'"
 				
-				*** if miCovWide are specified, all scalecovs are omitted
+				*** if miCovWide are specified, all commoncov's are omitted
 				if ("`miCovWide'" ~= "" ) {
 					*compare_lists "`covars_wide'" "`miCovWide'"
 					*local omit "`s(differences)'"
-					loca intersection: list covars_wide & miCovWide
-					local omit: list covars_wide - intersection
+					loca intersection: list covarsWde & miCovWide
+					local omit: list covarsWide - intersection
 					*local omit "`:list covars_wide - miCovWide'"
 				}
 				else if ("`miOmit'" ~= "") { // omited vars should be from the scalecovs list
@@ -697,20 +400,50 @@ program define pchained, eclass
 				local condComp "" 
 				local oDepvarListFiltered "" 
 				
-				*** Build the model for the stand-alone var at every timepoint
-				foreach var of local miDepVar {
+				*** Build the models for all scales and sadv at every timepoint
+				foreach dvar of local allOutcomes  {
 					
-					***  incorporate conditional imputation into the imputation model, if provided
-					noi _condimputation `"`condimputed'"' "" "`var'" "`timevar'" "`miDepVarsOriginal'" "`cov_invar'"
-					* noi sreturn list
-					local condImp "`s(condImp)'"
-					* noi di "`condImp'"
+					if `:list dvar in miScales' {   // if outcome is a scale
+						
+						*** Categorize the items of the scale
+						_scaleItemCategorization "`dvar'" "`isContScale'"
+						/*
+						***  incorporate conditional imputation into the imputation model, if provided
+						noi _condimputation `"`condimputed'"' "`dvar'" "`depvar'" "`timevar'" "`miSadv'" "`covInvar'"
+						local condImp "`s(condImp)'"
+						noi di "Conditional imputation: `condImp'"
+						
+						***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
+						noi _condimputation `"`condcomplete'"' "`dvar'" "`depvar'" "`timevar'" "" "`covInvar'" "`covVar'" "Comp"
+						local condComp "`s(condComp)'"
+						noi di "Condition: `condComp'"
+						*/
+						
+						
+					}
+					else {
+					/*
+						***  incorporate conditional imputation into the imputation model, if provided
+						noi _condimputation `"`condimputed'"' "" "`dvar'" "`timevar'" "`miSadv'" "`covInvar'"
+						* noi sreturn list
+						local condImp "`s(condImp)'"
+						* noi di "`condImp'"
 
-					***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
-					noi _condimputation `"`condcomplete'"' "" "`var'" "`timevar'" "" "`cov_invar'" "`cov_var'" "Comp"
-					local condComp "`s(condComp)'"
-					* noi di "`condComp'"
+						***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
+						noi _condimputation `"`condcomplete'"' "" "`dvar'" "`timevar'" "" "`covInvar'" "`covVar'" "Comp"
+						local condComp "`s(condComp)'"
+						* noi di "`condComp'"
+						
+					*/
+					}
+						
 					
+					
+					/**** collect all periods of the dependent variable
+					unab miDepVar: `s(depv)'_`timevar'*
+					*/
+				
+										
 	
 					
 					*** create the imputed variable lists in include
@@ -750,7 +483,7 @@ program define pchained, eclass
 						
 						* noi di "`var': `oDepVarList'"
 						
-						
+						exit
 						*** Check for non-imputed variables and include only those vars that are in miDepVarsOriginal but not
 						*** the dep var itself
 						
@@ -760,7 +493,7 @@ program define pchained, eclass
 								foreach fvar of local fullList {
 									if regexm("`fvar'", "(.+)_`timevar'[0-9]+$") {
 										local varStub "`=regexs(1)'" // y1
-										if `:list varStub in miDepVarsOriginal' { // check if var in depvarlist
+										if `:list varStub in miSadv' { // check if var in depvarlist
 											if regexm("`var'", "(.+)_`timevar'[0-9]+$") {
 												if "`=regexs(1)'" != "`varStub'" {
 													local oDepvarListFiltered "`oDepvarListFiltered' `fvar'"
@@ -836,6 +569,9 @@ program define pchained, eclass
 		}
 		* noi di "`mymodel'"
 		* exit
+		
+		
+		
 		
 
 		*** Write out the complete model
