@@ -174,3 +174,36 @@ di "`number'"
 		* exit
 		
 		
+				
+			/*
+			*** if miCovWide are specified, all commoncov's are omitted // NOT SURE ABOUT THAT!
+			if ("`miCovWide'" ~= "" ) {
+				*compare_lists "`covars_wide'" "`miCovWide'"
+				*local omit "`s(differences)'"
+				local intersection: list covarsWde & miCovWide
+				local omit: list covarsWide - intersection
+				*local omit "`:list covars_wide - miCovWide'"
+			}
+			else if ("`miOmit'" ~= "") { // omited vars should be from the commoncov list
+				local omit "`miOmit'"
+			}
+			*/
+			
+			
+			* noi di "`miCovWide'" 
+			* noi di "`covarsWide'"
+			
+			
+						
+				/*
+				*** >>>> This needs to be changed <<<< ****
+				*** Compare each covariate in commoncov to the omitted list
+				fvrevar `miCovWide', list
+				local myCovar "`r(varlist)'"
+				foreach cvar of local myCovar {
+					if `:list cvar in myOmitList' {
+						local miOmit "`miOmit' `cvar'"   
+					}
+				}
+				*/
+		

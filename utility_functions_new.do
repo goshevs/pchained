@@ -209,24 +209,25 @@ end
 
 
 capture program drop _scaleItemCategorization
-program define _scaleItemCategorization
+program define _scaleItemCategorization, sclass
 
-	args scale isContScale
+	args scale isContScale catcutoff mincsize
 	
 	*** Specify temp names for scalars and matrices
 	tempname vals freqs pCats nCats   
 			
 	*** Check item type as well as capture and report constant items and rare categories
 
-	local bin  "" // binary items
-	local cat  "" // multiple category items
-	local cont "" // continuous items
+	local bin  ""    // binary items
+	local cat  ""    // multiple category items
+	local cont ""    // continuous items
 	
-	local finalScale ""   // admitted items
-	local constant ""        // constant items
-	local rare ""            // items with rare categories 
-	local cuscont ""		// Items designated as continous by user
+	local constant ""  // constant items
+	local rare ""      // items with rare categories 
+	local cuscont ""   // Items designated as continous by user
 
+	local finalScale ""   // admitted items
+	
 	*** Collect all items of the scale
 	unab myscale: `scale'*
 	
@@ -234,7 +235,7 @@ program define _scaleItemCategorization
 	local userOverride: list scale in isContScale // is scale in user-defined?
 	* noi di "Override: `userOverride'"
 	if (`userOverride' == 1) {
-		foreach item of local myscale {  //iterate over items of user-defined
+		foreach item of local myscale {  // iterate over items of user-defined
 			capture tab `item', matrow(`vals')
 			if (_rc == 0) {  // if does not break
 				mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
@@ -258,7 +259,7 @@ program define _scaleItemCategorization
 	}
 	else {
 		*** Automatic assignment to all various types (may also have to look at the labels if they exist)
-		foreach item of local myscale {  //iterate over items of scales
+		foreach item of local myscale {  // iterate over items of scales
 			
 			*** Retrieve label info if it exists ***
 			local labname: value label `item'
@@ -337,7 +338,7 @@ program define _scaleItemCategorization
 	"Continuous items: " _n ///
 	"      Auto detected: `cont'" _n ///
 	"      User defined : `cuscont'" _n ///
-	"Excluded items: " _n ///
+	"*Excluded items*: " _n ///
 	"      Constant items: `constant'" _n ///
 	"      Categorical items with < `mincsize' obs in a category: `rare'"
 				
@@ -348,22 +349,224 @@ program define _scaleItemCategorization
 	sreturn local constant "`constant'"
 	sreturn local rare "`rare'"
 	sreturn local bin "`bin'"
-	sreturn local cuscont "`cuscont'" 
+	sreturn local mCat "`cat'"
+	sreturn local contUI "`cuscont'" 
 	
 end
 
+*** Creates the mean/sum score syntax for include()
+capture program drop _meanSumInclude
+program define _meanSumInclude, sclass
+
+	args mylist scoretype timevar timelevs
+
+	local include_items ""
+	
+	* noi di "`mylist'"
+	* noi di "`timelevs'"
+	
+	foreach scale of local mylist {
+		unab myitems: `scale'*
+		* noi di "`myitems'"
+		foreach tlev of local timelevs {
+			local taggregs ""
+			foreach item of local myitems {	
+				if regexm("`item'", "^`scale'[a-zA-Z0-9_]*_`timevar'`tlev'$") {
+					local taggregs "`taggregs' `=regexs(0)'"
+				}
+			}
+			* noi di "`taggregs'"	
+			*** This is where we write out the functions
+			local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
+			if "`scoretype'" == "sum" {
+				local include_items "`include_items' (`mysum')"
+			}	
+			else if "`scoretype'" == "mean" {
+				local nitems: word count `taggregs'	
+				local include_items "`include_items' (`mysum'/`nitems')"
+			}
+			else {
+				di in r "`scoretype' is not allowed as a score type"
+				exit 198
+			}
+		}
+	}
+	
+	sreturn local include_items "`include_items'"
+end
 
 
+*** Slice conditions
+capture program drop _parseCondition
+program define _parseCondition, sclass
+
+	args myinput type
+	
+	local nlistex "[a-zA-Z(-0-9)_\(\)<>~=\.\&\| ]+"
+	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
+	local myvars "([a-zA-Z0-9_\(\) ]+)([<>~=]+)([a-zA-Z(-0-9)_\(\) ]+)(\|?\&?)" // [a-zA-Z0-9_]\|\&\.\(\)]+"
+	
+	*noi di `"`myinput'"'
+	*noi di "TEST 0"
+	
+	while regexm(`"`myinput'"', `"`strregex'"') {
+		local scale `=regexs(0)'
+		*noi di "TEST 1"
+		*noi di `"`scale'"'
+		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
+		gettoken sname cond: scale, parse("=")
+		gettoken left cond: cond, parse("=")
+		local cond = trim(`"`cond'"')
+		local cond = subinstr(`"`cond'"', `"""',"",.)
+		local cond = subinstr(`"`cond'"', `"'"',"",.)
+		local sname = trim("`sname'")
+		
+		*noi di "`sname'"
+		
+		*** parsing the if condition
+		local ifL "" // left side
+		local ifS "" // signs
+		local ifR "" // right side
+		local ifB "" // between
+		*noi di "`cond'"
+		
+		local mycond = regexr(`"`cond'"', "^[ ]*if[ ]+", "")
+		while regexm(`"`mycond'"', `"`myvars'"') {
+			local ifL "`ifL' `=regexs(1)'"
+			local ifR "`ifR' `=regexs(3)'"
+			local ifS "`ifS' `=regexs(2)'"
+			local ifB "`ifB' `=regexs(4)'"
+			local mycond = subinstr(`"`mycond'"', "`=regexs(0)'", "",.)
+			
+		}
+		
+		* noi di "`cond'"
+		* noi di "`ifB'"
+		
+		*** Post result
+		sreturn local cond`type'_`sname' `cond'
+		sreturn local ifL`type'_`sname' `=itrim("`ifL'")'
+		sreturn local ifR`type'_`sname' `=itrim("`ifR'")'
+		sreturn local ifS`type'_`sname' `"`=trim("`ifS'")'"'
+		sreturn local ifB`type'_`sname' `"`=trim("`ifB'")'"'
+	}
+end
 
 
+**** Rebuild conditions
+capture program drop _buildCondition
+program define _buildCondition, sclass
+	
+	args j timevar tp miDepVarsOriginal cov_invar cov_var
+	
+	if regexm("`j'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
+		local aggType "`=regexs(1)'"
+		unab fullItemList: `=regexs(2)'*
+		local timeItemList ""
+		foreach item of local fullItemList { // collect items for same time period
+			if regexm("`item'", ".+_`timevar'`tp'") {
+				local timeItemList `=itrim("`timeItemList' `item'")'
+			}
+		}
+		local sumItemList = subinstr("`timeItemList'", " ", "+", .)	
+		if ("`aggType'" == "mean") {
+			local len: word count `timeItemList'
+			local expr "((`sumItemList')/`len')"
+		}
+		else if ("`aggType'" == "sum") {
+			local expr "(`sumItemList')"
+		}
+	}
+	else {  // this is failing to pick up y2 as a var!
+		*noi di "`j'"
+		*noi di "`cov_invar'"
+		*noi di "`miDepVarsOriginal'"
+		
+		if ("`:list j in cov_invar'" == "1") { // check the stand-alone varlist and time invar covars
+			local expr "`j'"
+		}
+		else if ("`:list j in miDepVarsOriginal'" == "1") | ("`:list j in cov_var'" == "1") {
+			local expr "`j'_`timevar'`tp'"
+		}
+		else {
+			capture confirm number `j'
+			if _rc {
+				* noi di _n "`j'"
+				noi di in r "Value or variable `j' on the RHS of condition is invalid."
+				error 489
+			}
+			else {
+				local expr "`j'"
+			}
+		}
+	}
+	sreturn local expr "`expr'"
+end
 
 
+**** Slice and rebuild the conditional strings
+capture program drop _imputationS2Cond
+program define _imputationS2Cond, sclass
 
+	args condimputed scale depvar timevar miDepVarsOriginal cov_invar cov_var type
+	
+	noi _parseCondition `"`condimputed'"' "`type'"
+	*noi sreturn list
+	if regexm("`depvar'", "(.+)_`timevar'([0-9]+)$") {
+		local depvar "`=regexs(1)'"
+		local tp "`=regexs(2)'"
+	}
+	if "`scale'" ~= "" {   //bypass to accommodate scale vars
+		local depvar "`scale'"
+	}
 
+	if "cond_`depvar'" ~= "" {
+		local condLHS "`s(ifL`type'_`depvar')'"   
+		local condRHS "`s(ifR`type'_`depvar')'"
+		local wSigns "`s(ifS`type'_`depvar')'"
+		local bSigns "`s(ifB`type'_`depvar')'"
+	}
+
+	*** Rebuilding the conditions
+	local myCount = 1
+	local condImp ""
+	
+	*** Rebuilding LHS
+	foreach j of local condLHS {
+		*** Construct the LHS
+		noi _buildCondition "`j'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'" "`cov_var'"
+		local lhsExpr `s(expr)'
+		
+		*** Rebuilding RHS
+		local right: word `myCount' of `condRHS'
+		noi _buildCondition "`right'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'" "`cov_var'"
+		local rhsExpr `s(expr)'
+
+		*** Building the dependent variable-specific condition
+		local condImp `"`condImp' `lhsExpr' `:word `myCount' of `wSigns'' `rhsExpr' `:word `myCount' of `bSigns''"'
+		local ++myCount
+	}
+	if "`condImp'" ~= "" {
+		if "`type'" == ""  {
+			sreturn local condImp "cond(if`condImp')"
+		}
+		else {
+			sreturn local cond`type' "if`condImp'"
+		}
+	}
+	else {
+		sreturn local condImp ""
+		sreturn local cond`type' ""
+	}
+	
+end
 
 exit
 
 
+
+
+/*
 
 capture program drop _parseConditions
 program define _parseConditions, sclass
@@ -433,6 +636,7 @@ end
 			exit 489
 		}
 		
+*/
 
 
 *** Parser of the user input with multiple arguments of the type
@@ -625,209 +829,4 @@ program define _parse_ovar_model, sclass
 end
 */
 
-*** Creates the mean/sum score syntax for include()
-capture program drop _meanSumInclude
-program define _meanSumInclude, sclass
 
-	args mylist scoretype timevar timelevs
-
-	local include_items ""
-	
-	* noi di "`mylist'"
-	* noi di "`timelevs'"
-	
-	foreach scale of local mylist {
-		unab myitems: `scale'*
-		* noi di "`myitems'"
-		foreach tlev of local timelevs {
-			local taggregs ""
-			foreach item of local myitems {	
-				if regexm("`item'", "^`scale'[a-zA-Z0-9_]*_`timevar'`tlev'$") {
-					local taggregs "`taggregs' `=regexs(0)'"
-				}
-			}
-			* noi di "`taggregs'"	
-			*** This is where we write out the functions
-			local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
-			if "`scoretype'" == "sum" {
-				local include_items "`include_items' (`mysum')"
-			}	
-			else if "`scoretype'" == "mean" {
-				local nitems: word count `taggregs'	
-				local include_items "`include_items' (`mysum'/`nitems')"
-			}
-			else {
-				di in r "`scoretype' is not allowed as a score type"
-				exit 198
-			}
-		}
-	}
-	
-	sreturn local include_items "`include_items'"
-end
-
-
-*** Slice conditions
-capture program drop _parse_condition
-program define _parse_condition, sclass
-
-	args myinput type
-	
-	local nlistex "[a-zA-Z(-0-9)_\(\)<>~=\.\&\| ]+"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
-	local myvars "([a-zA-Z0-9_\(\) ]+)([<>~=]+)([a-zA-Z(-0-9)_\(\) ]+)(\|?\&?)" // [a-zA-Z0-9_]\|\&\.\(\)]+"
-	
-	*noi di `"`myinput'"'
-	*noi di "TEST 0"
-	
-	while regexm(`"`myinput'"', `"`strregex'"') {
-		local scale `=regexs(0)'
-		*noi di "TEST 1"
-		*noi di `"`scale'"'
-		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
-		gettoken sname cond: scale, parse("=")
-		gettoken left cond: cond, parse("=")
-		local cond = trim(`"`cond'"')
-		local cond = subinstr(`"`cond'"', `"""',"",.)
-		local cond = subinstr(`"`cond'"', `"'"',"",.)
-		local sname = trim("`sname'")
-		
-		*noi di "`sname'"
-		
-		*** parsing the if condition
-		local ifL "" // left side
-		local ifS "" // signs
-		local ifR "" // right side
-		local ifB "" // between
-		*noi di "`cond'"
-		
-		local mycond = regexr(`"`cond'"', "^[ ]*if[ ]+", "")
-		while regexm(`"`mycond'"', `"`myvars'"') {
-			local ifL "`ifL' `=regexs(1)'"
-			local ifR "`ifR' `=regexs(3)'"
-			local ifS "`ifS' `=regexs(2)'"
-			local ifB "`ifB' `=regexs(4)'"
-			local mycond = subinstr(`"`mycond'"', "`=regexs(0)'", "",.)
-			
-		}
-		
-		* noi di "`cond'"
-		* noi di "`ifB'"
-		
-		*** Post result
-		sreturn local cond`type'_`sname' `cond'
-		sreturn local ifL`type'_`sname' `=itrim("`ifL'")'
-		sreturn local ifR`type'_`sname' `=itrim("`ifR'")'
-		sreturn local ifS`type'_`sname' `"`=trim("`ifS'")'"'
-		sreturn local ifB`type'_`sname' `"`=trim("`ifB'")'"'
-	}
-end
-
-
-**** Rebuild conditions
-capture program drop _construct_conditions
-program define _construct_conditions, sclass
-	
-	args j timevar tp miDepVarsOriginal cov_invar cov_var
-	
-	if regexm("`j'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
-		local aggType "`=regexs(1)'"
-		unab fullItemList: `=regexs(2)'*
-		local timeItemList ""
-		foreach item of local fullItemList { // collect items for same time period
-			if regexm("`item'", ".+_`timevar'`tp'") {
-				local timeItemList `=itrim("`timeItemList' `item'")'
-			}
-		}
-		local sumItemList = subinstr("`timeItemList'", " ", "+", .)	
-		if ("`aggType'" == "mean") {
-			local len: word count `timeItemList'
-			local expr "((`sumItemList')/`len')"
-		}
-		else if ("`aggType'" == "sum") {
-			local expr "(`sumItemList')"
-		}
-	}
-	else {  // this is failing to pick up y2 as a var!
-		*noi di "`j'"
-		*noi di "`cov_invar'"
-		*noi di "`miDepVarsOriginal'"
-		
-		if ("`:list j in cov_invar'" == "1") { // check the stand-alone varlist and time invar covars
-			local expr "`j'"
-		}
-		else if ("`:list j in miDepVarsOriginal'" == "1") | ("`:list j in cov_var'" == "1") {
-			local expr "`j'_`timevar'`tp'"
-		}
-		else {
-			capture confirm number `j'
-			if _rc {
-				* noi di _n "`j'"
-				noi di in r "Value or variable `j' on the RHS of condition is invalid."
-				error 489
-			}
-			else {
-				local expr "`j'"
-			}
-		}
-	}
-	sreturn local expr "`expr'"
-end
-
-
-**** Slice and rebuild the conditional strings
-capture program drop _condimputation
-program define _condimputation, sclass
-
-	args condimputed scale depvar timevar miDepVarsOriginal cov_invar cov_var type
-	
-	noi _parse_condition `"`condimputed'"' "`type'"
-	*noi sreturn list
-	if regexm("`depvar'", "(.+)_`timevar'([0-9]+)$") {
-		local depvar "`=regexs(1)'"
-		local tp "`=regexs(2)'"
-	}
-	if "`scale'" ~= "" {   //bypass to accommodate scale vars
-		local depvar "`scale'"
-	}
-
-	if "cond_`depvar'" ~= "" {
-		local condLHS "`s(ifL`type'_`depvar')'"   
-		local condRHS "`s(ifR`type'_`depvar')'"
-		local wSigns "`s(ifS`type'_`depvar')'"
-		local bSigns "`s(ifB`type'_`depvar')'"
-	}
-
-	*** Rebuilding the conditions
-	local myCount = 1
-	local condImp ""
-	
-	*** Rebuilding LHS
-	foreach j of local condLHS {
-		*** Construct the LHS
-		noi _construct_conditions "`j'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'" "`cov_var'"
-		local lhsExpr `s(expr)'
-		
-		*** Rebuilding RHS
-		local right: word `myCount' of `condRHS'
-		noi _construct_conditions "`right'" "`timevar'" "`tp'" "`miDepVarsOriginal'" "`cov_invar'" "`cov_var'"
-		local rhsExpr `s(expr)'
-
-		*** Building the dependent variable-specific condition
-		local condImp `"`condImp' `lhsExpr' `:word `myCount' of `wSigns'' `rhsExpr' `:word `myCount' of `bSigns''"'
-		local ++myCount
-	}
-	if "`condImp'" ~= "" {
-		if "`type'" == ""  {
-			sreturn local condImp "cond(if`condImp')"
-		}
-		else {
-			sreturn local cond`type' "if`condImp'"
-		}
-	}
-	else {
-		sreturn local condImp ""
-		sreturn local cond`type' ""
-	}
-	
-end

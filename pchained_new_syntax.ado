@@ -97,18 +97,17 @@ program define pchained, eclass
 		_parseAnything "`anything'"
 		
 		*** Preliminary scan of models to identify types of inputs		
-		local miScale ""       // scales
-		local miSadv  ""       // stand-alone variables
-		local miModelCovs ""   // covariates included in the models
-		local allOutcomes ""
-		local isContScale ""   // has user specified that scale should be continuous?
+		local miScale ""           // scales
+		local miSadv  ""           // stand-alone variables
+		local miModelCovs ""       // covariates included in the models
+		local allOutcomes ""    
+		local isContScale ""       // has user specified that scale should be continuous?
+		local commonModelCovs ""   // covariates present in all models 
 		
 		local i = 1
 		while `"`s(model`i')'"' ~= "" {
 			*** Parse the model
 			_parseModels "`s(model`i')'"
-
-			local allOutcomes "`allOtcomes' `s(depv)'"
 			
 			*** Check if dvar is a scale or sadv
 			local remainingOpts "`s(remaningOpts)'"
@@ -121,9 +120,13 @@ program define pchained, eclass
 			else {
 				local miSadv "`=trim("`miSadv' `s(depv)'")'"
 			}
+			
 			local miModelCovs "`=trim(stritrim("`miModelCovs' `s(covs)'"))'"
 			local ++i
 		}
+		
+		*** Combine outcomes
+		local allOutcomes "`miScale' `miSadv'"
 		
 		*** Model inputs are identified
 		noi di "All outcomes: `allOutcomes'"
@@ -281,7 +284,7 @@ program define pchained, eclass
 		*** We are imputing with data in WIDE form. 
 		
 		
-		*** <><><> Undocumented feature: stop execution to debug after reshaping
+		*** +++ Undocumented feature: stop execution to debug after reshaping
 		if ("`debug'" ~= "") {
 			noi di "Debugging suspension requested."
 			exit
@@ -290,290 +293,315 @@ program define pchained, eclass
 		************************************************************************
 		*** Parsing option MODel
 		
+		/*
 		if `"`model'"' ~= `""' {
 			* noi di `"`model'"'
 			_parseMODel `"`model'"' "_model"  // gives s(`scale'_model)
 		}
 		* noi sreturn list
+		*/
 		
 		
 		noi di _n "********************************************************" _n ///
 			"Stand-alone dependent variables included in the imputation model:" _n ///
 			"      `miSadv'" 
 			noi di "********************************************************" _n ///
-					
-		if ("`allOutcomes'" ~= "") {
-			_parseAnything "`anything'"
-			
-			local iterModels = 1
-			while `"`s(model`iterModels')'"' ~= "" {
-				*** parse the syntax of the model
-				_parseModels "`s(model`iterModels')'"
-				* noi sreturn list
-				local miCovVar "`s(covs)'"            // covariates
-				local miIncVars "`s(includeVars)'"    // other depVars/means/sums of scales
-				local miOmitVars "`s(omitVars)'"      // omit
-				local miOpts "`s(remaningOpts)'"      // other options
-				
-				* noi di "`miCovVar'"
-				* noi di "`miIncVars'"
-				
-				*** retrieve outcome
-				local outcome "`s(depv)'"
-				
-				*** retrieve the user supplied model
-				_parseMODel `"`model'"' "_model"
-				local userModel `"`s(`outcome'_model)'"'
-
-				* noi di "`miDepVar'"
-				* noi di "`miIncVars'"
-				
-				*** collect all covariates for all periods
-				local miCovWide ""
-				if "`miCovVar'" ~= "" {
-					foreach var of local miCovVar {
-						fvunab placeholder: `var'*					
-						foreach myVar of local placeholder {
-							if regexm("`myVar'", "`var'(_`timevar'[0-9]+)?$") {
-								local miCovWide "`miCovWide' `myVar'"
-							}
-						}
-					}	
-				}
-				
-				* noi di "`miCovWide'"
-				
-				* noi di "`miCovVar'"
-				* noi di "`miOmitVars'"
-				* noi di "`covars_wide'"
-
-				*** collect all omited variables
-				if "`miOmitVars'" ~= "" {
-					local miOmit ""
-					
-					*** Build list of omitted vars
-					local myOmitList ""
-					* noi di "`miOmitVars'"
-					
-					foreach var of local miOmitVars {
-						*** Check if asked to omit a variable not present in the model
-						capture fvunab fullList: `var'*
-						if _rc {
-							noi di in r "Variable(s) `var' cannot be omited because it is not included in the model"
-							error 486
-						}
-						local myOmitList "`myOmitList' `fullList'"
-					}
-					
-					*** Compare each covariate in commoncov to the omitted list
-					foreach cvar of local covarsWide {
-						fvrevar `cvar', list
-						local myCovar "`r(varlist)'"
-						if `:list myCovar in myOmitList' {
-							local miOmit "`miOmit' `cvar'"
-						}
-					}
-				}
-
-				* noi di "`miOmit'"
-				* noi di "`miCovWide'"
-				
-				*** if miCovWide are specified, all commoncov's are omitted
-				if ("`miCovWide'" ~= "" ) {
-					*compare_lists "`covars_wide'" "`miCovWide'"
-					*local omit "`s(differences)'"
-					loca intersection: list covarsWde & miCovWide
-					local omit: list covarsWide - intersection
-					*local omit "`:list covars_wide - miCovWide'"
-				}
-				else if ("`miOmit'" ~= "") { // omited vars should be from the scalecovs list
-					local omit "`miOmit'"
-				}
-				* noi di "`miCovWide'" 
-				*noi di "`covars_wide'"
-				
-				local meanList ""
-				local sumList ""
-				local oDepVarList ""
-				local oDepVars ""
-				local condImp ""
-				local condComp "" 
-				local oDepvarListFiltered "" 
-				
-				*** Build the models for all scales and sadv at every timepoint
-				foreach dvar of local allOutcomes  {
-					
-					if `:list dvar in miScales' {   // if outcome is a scale
-						
-						*** Categorize the items of the scale
-						_scaleItemCategorization "`dvar'" "`isContScale'"
-						/*
-						***  incorporate conditional imputation into the imputation model, if provided
-						noi _condimputation `"`condimputed'"' "`dvar'" "`depvar'" "`timevar'" "`miSadv'" "`covInvar'"
-						local condImp "`s(condImp)'"
-						noi di "Conditional imputation: `condImp'"
-						
-						***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
-						noi _condimputation `"`condcomplete'"' "`dvar'" "`depvar'" "`timevar'" "" "`covInvar'" "`covVar'" "Comp"
-						local condComp "`s(condComp)'"
-						noi di "Condition: `condComp'"
-						*/
-						
-						
-					}
-					else {
-					/*
-						***  incorporate conditional imputation into the imputation model, if provided
-						noi _condimputation `"`condimputed'"' "" "`dvar'" "`timevar'" "`miSadv'" "`covInvar'"
-						* noi sreturn list
-						local condImp "`s(condImp)'"
-						* noi di "`condImp'"
-
-						***  incorporate condition on exogenous/complete regressor into the imputation model, if provided
-						noi _condimputation `"`condcomplete'"' "" "`dvar'" "`timevar'" "" "`covInvar'" "`covVar'" "Comp"
-						local condComp "`s(condComp)'"
-						* noi di "`condComp'"
-						
-					*/
-					}
-						
-					
-					
-					/**** collect all periods of the dependent variable
-					unab miDepVar: `s(depv)'_`timevar'*
-					*/
-				
-										
+		
+		
+		
+		************************************************************************
+		*** Parsing anything and build the models
 	
+		_parseAnything "`anything'"
+		* noi sreturn list
+		
+		local iterModels = 1
+		while `"`s(model`iterModels')'"' ~= "" {
+			*** Parse the syntax of the model
+			_parseModels "`s(model`iterModels')'"
+			* noi sreturn list
+			local miCovVar "`s(covs)'"            // collect covariates
+			local miIncVars "`s(includeVars)'"    // collect other depVars/means/sums of scales
+			local miOmitVars "`s(omitVars)'"      // collect omit
+			local miOpts "`s(remaningOpts)'"      // collect other options
+			
+			* noi di "`miCovVar'"
+			* noi di "`miIncVars'"
+			
+			*** --- Retrieve OUTCOME
+			
+			local depVarMod "`s(depv)'"
+			
+			*** --- Retrieve MODEL if in MODel option
+			
+			_parseMODel `"`model'"' "_model"
+			local userModel `"`s(`depVarMod'_model)'"'
+
+			* noi di "`miDepVar'"
+			* noi di "`miIncVars'"
+			
+			*** --- Collect COVARIATES from all time-periods
+			
+			local miCovList ""
+			if "`miCovVar'" ~= "" {
+				foreach var of local miCovVar {
+					fvunab placeholder: `var'*					
+					foreach myVar of local placeholder {
+						if regexm("`myVar'", "`var'(_`timevar'[0-9]+)?$") {
+							local miCovList "`miCovList' `myVar'"
+						}
+					}
+				}	
+			}
+
+			* noi di "`miCovVar'"    // covariates as enter into the syntax
+			* noi di "`miCovList'"   // covariates as enter the model
+			
+			
+			*** --- Collect OMITTED variables
+			
+			local miOmitList ""
+			if "`miOmitVars'" ~= "" {
+				*** Build list of omitted vars
+				foreach var of local miOmitVars {
+					*** Check if asked to omit a variable not present in the model
+					capture fvunab fullList: `var'*
+					if _rc {
+						noi di in r "Variable(s) `var' cannot be omited because it is not included in the model"
+						error 486
+					}
+					local miOmitList "`miOmitList' `fullList'"
+				}
+			}
+			* noi di "`miOmitVars'"   // omited variables as enter into the syntax
+			* noi di "`miOmitList'"   // omited variables as enter the model
+			
+	
+			
+			*** --- BUILDING THE SYNTAX ---
+
+			local dVarList ""     // list of all scale items/variables across time periods
+
+			local meanList ""     // list of means
+			local sumList ""      // list of sums
+			local rIncVarList ""  // list of other included variables
+			local rDepVars ""     // list of other included vars as required by mi impute chained
+			
+			local condImp ""      // condition for conditional imputation
+			local condComp ""     // condition for imputation on exogenous/complete predictor
+
+			local scale ""        // only populated if var is a scale
+				
+				
+			if `:list depVarMod in miScale' {            // building the list of items of the scale at all time points
+				*** Categorize the items of the scale
+				noi _scaleItemCategorization "`depVarMod'" "`isContScale'" "`catcutoff'" "`mincsize'"
+				local dVarList "`s(finalScale)'"  // building the items of the scale (for all time points)
+				local itemsBin "`s(bin)'"
+				local itemsMCat "`s(mCat)'"
+				local itemsCon "`s(contUI)'"
+				
+				local scale "`depVarMod'"
+			}
+			else {  // if outcome is a sadv
+				unab dVarList: `depVarMod'*             // building the list of sadv at all time points
+			}
+			
+			*** Outcomes in all time periods
+			* noi di "`dVarList'"
+		
+			foreach dVar of local dVarList {
+				 
+				*** +++ Incorporate imputation subject to conditions, if provided
+				*** Conditional imputation
+				_imputationS2Cond `"`condimputed'"' "`scale'" "`dVar'" "`timevar'" "`miSadv'" "`covInvar'"
+				local condImp "`s(condImp)'"
+				
+				*** Imputation subject to an exogenous/complete regressor
+				_imputationS2Cond `"`condcomplete'"' "`scale'" "`dVar'" "`timevar'" "" "`covInvar'" "`covVar'" "Comp"
+				local condComp "`s(condComp)'"
+				
+				* noi di "Conditional imputation: `condImp'"
+				* noi di "Condition: `condComp'"
+			
+				*** Create the INCLUDE variable lists
+				if "`miIncVars'" ~= "" {					
+
+					if !regexm("`miOpts'", "noimputed") { // include() implies nonimputed 
+						local miOpts "`miOpts' noimputed"
+					}
+				
+					*** Retrieve time period of dVar
+					if regexm("`dVar'","_`timevar'([0-9]+)$") {
+						local timePeriod `=regexs(1)'
+					}					
+					*** Create --MEAN-- scores
+					if regexm("`miIncVars'","mean\(([a-zA-Z0-9_ ]+)\)") {
+						local meanList `=regexs(1)'
+						local meanRemove `=regexs(0)'
+						// ()()() option: to replace from period-specific to all periods, replace timePeriod with timelevs
+						_meanSumInclude "`meanList'" "mean" "`timevar'" "`timelevs'"
+						local meanList "`s(include_items)'"
+					}
+					*** Create --SUM-- scores
+					if regexm("`miIncVars'","sum\(([a-zA-Z0-9_ ]+)\)") {
+						local sumList `=regexs(1)'
+						local sumRemove `=regexs(0)'
+						// ()()() option: to replace from period-specific to all periods, replace timePeriod with timelevs
+						_meanSumInclude "`sumList'" "sum" "`timevar'" "`timelevs'"
+						local sumList "`s(include_items)'"
+					}
 					
-					*** create the imputed variable lists in include
-					if "`miIncVars'" ~= "" {					
-						*** include implies noimputed!!!
-						if !regexm("`miOpts'", "noimputed") {
-							local miOpts "`miOpts' noimputed"
-						}
+					*** Remaining variables in include
 					
-						*** retrieve time period of depVar
-						if regexm("`var'","_`timevar'([0-9]+)$") {
-							local timePeriod `=regexs(1)'
-						}					
-						*** mean score?
-						if regexm("`miIncVars'","mean\(([a-zA-Z0-9_ ]+)\)") {
-							local meanList `=regexs(1)'
-							local meanRemove `=regexs(0)'
-							// to replace from period-specific to all periods, replace timePeriod with timelevs
-							_meanSumInclude "`meanList'" "mean" "`timevar'" "`timelevs'"
-							local meanList "`s(include_items)'"
-						}
-						*** sum score?
-						if regexm("`miIncVars'","sum\(([a-zA-Z0-9_ ]+)\)") {
-							local sumList `=regexs(1)'
-							local sumRemove `=regexs(0)'
-							// to replace from period-specific to all periods, replace timePeriod with timelevs
-							_meanSumInclude "`sumList'" "sum" "`timevar'" "`timelevs'"
-							local sumList "`s(include_items)'"
-						}
-						
-						* noi di "`var': `oDepVarList'"
-						
-						*** other depVar?
-						local oDepVarList = subinstr("`miIncVars'","`meanRemove'", "", .)
-						local oDepVarList = subinstr("`oDepVarList'","`sumRemove'", "", .)
-						local oDepVarList = stritrim("`oDepVarList'")
-						
-						* noi di "`var': `oDepVarList'"
-						
-						exit
-						*** Check for non-imputed variables and include only those vars that are in miDepVarsOriginal but not
-						*** the dep var itself
-						
-						if "`oDepVarList'" ~= "" {
-							foreach ovar of local oDepVarList {
-								unab fullList: `ovar'*
-								foreach fvar of local fullList {
-									if regexm("`fvar'", "(.+)_`timevar'[0-9]+$") {
-										local varStub "`=regexs(1)'" // y1
-										if `:list varStub in miSadv' { // check if var in depvarlist
-											if regexm("`var'", "(.+)_`timevar'[0-9]+$") {
-												if "`=regexs(1)'" != "`varStub'" {
-													local oDepvarListFiltered "`oDepvarListFiltered' `fvar'"
-												}
-											}
-										}					
+					local rIncVarList = subinstr("`miIncVars'","`meanRemove'", "", .)
+					local rIncVarList = subinstr("`rIncVarList'","`sumRemove'", "", .)
+					local rIncVarList = stritrim("`rIncVarList'")
+					
+					* noi di "`depVarMod': `rIncVarList'"
+					
+					*** <><><> Check for non-imputed variables and include only those vars that are in allOutcomes
+					*** except for the dep var itself
+					
+					local rIncVarListUpdated ""   // list of valid included variables
+					if "`rIncVarList'" ~= "" {
+						foreach rVar of local rIncVarList {
+							*** Check if there is a wildcard in rVar
+							local wCard = strpos("`rVar'", "*")
+							if `wCard' ~= 0 {  // if there is a wildcard
+								local preFix = substr("`rVar'", 1, `=`wCard' -1') // get the prefix
+								// go through the list of allOutcomes to see which they are
+								foreach out of local allOutcomes {
+									if "`=substr("`out'", 1, `=`wCard' -1')'" == "`preFix'" {
+										local rIncVarListUpdated "`rIncVarListUpdated' `out'"
 									}
 								}
-								if `:list ovar in namelist' {  // check if var in list of scales
-									unab fullList: `ovar'*
-									local oDepvarListFiltered "`oDepvarListFiltered' `fullList'"
-								}
-							}	
+							}
+							else {  // there is no wildcard
+								local rIncVarListUpdated "`rIncVarListUpdated' `rVar'"
+							}
 						}
-					}	
-					*noi di "`var': `oDepVarList'"
-					*noi di "`var': `oDepvarListFiltered'"
+						local rIncVarListUpdated: list rIncVarListUpdated - depVarMod // remove current outcome from list
 					
-					*** extract the model from user input
-					if (regexm("`userModel'", ",[ ]*") == 0) {
-						local userModelVar "`userModel' `condComp',"
-					}
-					else {
-						local userModelVar "`=subinstr("`userModel'", ",", " `condComp',", 1)'"
-					}
-					* noi di "`userModelVar'"
-					
-					*** retrieve the list of omited vars
-					if "`omit'" ~= "" {
-						local omitOpt "omit(`omit')"
-					}
-					
-					*** collect	remaining depVar timepoints
-					local depVarRemaining: list miDepVar - var
-					local updateRemaining ""
-					foreach myVar of local depVarRemaining {
-						local updateRemaining "`updateRemaining' (`myVar')"
-					}
-					
-					*** collect oDepVars
-					* noi di "`oDepVarList'"
-					* noi di "`oDepvarListFiltered'"
-					
-					if "`oDepvarListFiltered'" ~= "" {  // this is from include()
-						foreach mydVar of local oDepvarListFiltered {
-							local oDepVars "`oDepVars' (`mydVar')"
+						*** Create the final complete list of included variables
+						local rIncVarListFinal ""
+						foreach finalVar of local rIncVarListUpdated {
+							unab collection: `finalVar'*
+							local rIncVarListFinal "`rIncVarListFinal' `collection'"
 						}
+						* noi di "`depVarMod':: `rIncVarListFinal'"
 					}
-					* noi di "`updateRemaining'"
-					* noi di "`oDepVars'"
-					* noi di "`miOpts'"
-					* noi di "`includeOpt'"
-					* noi di "`var': `miCovWide'"
-					
-					*** Review this!!
-					if regexm("`miOpts'", "noimputed") {
-						*** create the list of expressions for include
-						local includeOpt "include(`updateRemaining' `miCovWide' `meanList' `sumList' `oDepVars')"
+				}  // end of INCLUDE
+				
+				*** Write out the include varlist as required by -mi impute chained-
+				local rDepVars ""
+				if "`rIncVarListFinal'" ~= "" { 
+					foreach mydVar of local rIncVarListFinal {
+						local rDepVars "`rDepVars' (`mydVar')"
 					}
-					else {
-						local includeOpt "include(`miCovWide' `meanList' `sumList')"
-					}
-					
-					*** write the variable model out
-					local mymodel "`mymodel' (`userModelVar' `miOpts' `includeOpt' `omitOpt' `condImp') `var' "
-					* noi di "`mymodel'"
-					*exit
-					
 				}
-				local ++iterModels
-				_input_parser "`anything'"
+						
+				*** Write out the INCLUDE option as it should enter the model
+				local includeOpt "`miCovWide' `meanList' `sumList'"
+				if regexm("`miOpts'", "noimputed") {
+					*** If no imputed variables will be included, add remaining outcomes and dependent vars
+					local includeOpt "`dVarComplement' `rDepVars' `includeOpt'"
+				}
+				local includeOpt "include(`includeOpt')"
+								
+								
+				*** Remove options belonging to -pchained- from MIOPTS
+				if regexm("`miOpts'", "[ ]*(scale)[ ]*") {
+					local miOpts = subinstr("`miOpts'", "`=regexs(1)'", "", .)
+				}
+				if regexm("`miOpts'", "[ ]*(cont|continous)[ ]*") {
+					local miOpts = subinstr("`miOpts'", "`=regexs(1)'", "", .)
+				}
+				local miOpts = stritrim(strtrim("`miOpts'"))
+				
+				
+				*** Develop MODEL specification and incorporate conditioning
+				
+				if (`"`userModel'"' == "") {   // if model is not provided
+					if ("`scale'" ~= "" ) {    // if scale item
+						if `: list dVar in itemsBin' {    // binary items
+							local userModel "logit"
+						}
+						else if `: list dVar in itemsMCat' {  // items with more than two categories
+							local userModel "ologit"
+						}
+						else {   // continuous items
+							local userModel "regress"				
+						}
+					}
+					else {   // if not a scale item
+						noi di in r "Provide an input in option model() for `depVarMod'"
+						exit 489
+					}
+				}
+				
+				if (regexm("`userModel'", ",[ ]*") == 0) {
+					local userModelVar "`userModel' `condComp',"
+				}
+				else {
+					local userModelVar "`=subinstr("`userModel'", ",", " `condComp',", 1)'"
+				}
+				
+				*** Set up the OMIT option as it should enter the model
+				local omitOpt ""
+				if "`miOmitList'" ~= "" {
+					local omitOpt "omit(`miOmitList')"
+				}
+				
+				*** Collect all other but current timepoints of dVar	
+				local dVarRemaining: list dVarList - dVar
+				local dVarComplement ""
+				foreach myVar of local dVarRemaining {
+					local dVarComplement "`dVarComplement' (`myVar')"
+				}
+	
+				*** Write out the MODEL for dVar
+				local miModel "`miModel' (`userModelVar' `miOpts' `includeOpt' `omitOpt' `condImp') `dVar' "
+				* noi di _n "`miModel'"
+				*exit
+				
+			}
+			local ++iterModels
+			_parseAnything "`anything'"
+		}
+
+	*noi di "`miModel'"
+	
+	exit
+	
+	
+	*** Here we need to identify the common covariates in the models and check againts commonCov
+    *** FIX WEIGHTING AND FIX COMMON COVARIATES
+	
+	
+	
+		/*
+				**** By Zitong: adding sampling weight. The syntax is a little bit lengthy but more clear 
+			if "`weight'" ~= "" {
+				local model_endpart "= `covars_wide' [`weight'=`exp'], `mioptions'"  // covars weight and mioptions
+			}
+			else {
+				local model_endpart "= `covars_wide', `mioptions'"	// covars , and mioptions			
 			}
 		}
-		* noi di "`mymodel'"
-		* exit
+		else {
+			if "`weight'" ~= "" {
+				local model_endpart "[`weight'=`exp'], `mioptions'"  // weight, and mioptions
+			}
+			else {
+				local model_endpart ", `mioptions'" // Just mioptions			
+			} 
+		}	
 		
-		
-		
-		
+*/
 
+	exit
+	
 		*** Write out the complete model
 
 		local model_full "`mymodel' `model_endpart'"
