@@ -20,7 +20,8 @@ simdata 200 3
 pchained (s1_i, noimputed scale), ///
 		  i(id) t(time) ///
 		  mio(add(1) chaindots rseed(123456) dryrun)
-		  
+exit
+
 *** Categorical items plus covariates
 simdata 200 3
 pchained (s1_i, noimputed scale), ///
@@ -202,22 +203,25 @@ replace y6 = -9999999 if x5 < 0  // assign a large number that can be replaces w
 *** >>>>>>>
 *>>>>>>>>>>>>>>>>>>>>>>>>>
 
-pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) /// 
-		 (s2_i, include(mean(s1_i) sum(s5_i s6_i)) scale omit(x5_base)) ///
-		 (s5_i, include(mean(s1_i s2_i s6_i)) scale) ///
-		 (s6_i, include(s1_i mean(s2_i s5_i)) scale omit(x5_base)) ///
-		 (y2 i.yz, noimputed omit(x* y*))  ///
-		 (y4 i.yx i.yz x5, include(y2 mean(s1_i)) omit(x5_base)) ///
-		 (y5 i.yx x1 i.yz x5 i.x2, include(y*) omit(x5_base)) ///
-		 (y6, noimputed omit(x* y*)), ///
-	     i(id) t(time) ///
-		 common(x1 i.x2 x3 y1 x5*) ///
-		 mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)" ///
-		 	 y2 = "regress" y4 = "pmm, knn(3)" y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
-		 condc(s5_i = "if x5_base > -1" y6 = "if x5 >= 0") ///
-		 condi(s6_i = "if mean(s1_i) > 0" y5 = "if y4 > -1") ///
-		 mio(add(1) chaindots rseed(123456) dryrun)
-	  
+#d ;
+pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) 
+		 (s2_i, include(mean(s1_i) sum(s5_i s6_i)) scale omit(x5_base))
+		 (s5_i, include(mean(s1_i s2_i s6_i)) scale)
+		 (s6_i, include(s1_i mean(s2_i s5_i)) scale omit(x5_base))
+		 (y2 i.yz, noimputed omit(x* y*))
+		 (y4 i.yx i.yz x5, include(y2 mean(s1_i)) omit(x5_base))
+		 (y5 i.yx x1 i.yz x5 i.x2, include(y*) omit(x5_base))
+		 (y6, noimputed omit(x* y*)),
+	     i(id) t(time)
+		 common(x1 i.x2 x3 y1 x5*)
+		 mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" 
+			 s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)"
+		 	 y2 = "regress" y4 = "pmm, knn(3)" 
+			 y5 = "pmm, knn(3)" y6 = "pmm, knn(3)")
+		 condc(s5_i = "if x5_base > -1" y6 = "if x5 >= 0") 
+		 condi(s6_i = "if mean(s1_i) > 0" y5 = "if y4 > -1") 
+		 mio(add(1) chaindots rseed(123456) dryrun);
+#d cr
 
 
 ********************************************************************************

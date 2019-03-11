@@ -155,6 +155,9 @@ program define simdata
 		foreach var of varlist s5_* {
 			label var `var' "recorded if x5_time1 >= 0"
 		}
+		foreach var of varlist s6_* {
+			label var `var' "recorded if mean(s1_i) > 0"
+		}
 			
 	}
 end

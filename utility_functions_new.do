@@ -27,7 +27,7 @@ program define _parseModels, sclass
 	
 	args model
 	
-	noi di "`model'"
+	* noi di "`model'"
 	
 	gettoken eq opts: model, parse(",")
 	local ovar `:word 1 of `eq''
@@ -47,7 +47,7 @@ program define _parseModels, sclass
 	if regexm("`opts'", "include\((([a-zA-Z0-9_.\* ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+)\)") {
 		local includeOpt `=regexs(0)'
 		local includeVars `=regexs(1)'
-		noi di "`includeVars'"
+		* noi di "`includeVars'"
 		
 	}
 	
@@ -141,10 +141,10 @@ program define _isInModel, sclass
 		foreach element in `:s(macros)' {
 			if regexm("`element'", "^if`side'_.+") {
 				local match "`s(`=regexs(0)')'"
-				noi di "Matched cond element: `match'"
+				* noi di "Matched cond element: `match'"
 				if regexm("`match'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") { // is it a scale?
 					local condScale "`=regexs(2)'"
-					noi di "Conditional scale: `condScale'"
+					* noi di "Conditional scale: `condScale'"
 					local inList: list miScale & condScale // check of the scale is in the list of scales
 					if "`inList'" == "" {
 						noi di in r "Scale `condScale' specified in option condimputed() is not present in the model"
@@ -158,7 +158,6 @@ program define _isInModel, sclass
 					}
 					else {                    // if complete covariate
 						local mylist "`covars'"
-						noi di "My covariates: `covars'" 
 						local printType "condcomplete()"
 					}
 					
@@ -201,12 +200,12 @@ program define _parseMODel, sclass
 	}
 end
 
-
+*** Categorize the items of scales and print summary information
 capture program drop _scaleItemCategorization
 program define _scaleItemCategorization, sclass
 
-	args scale isContScale catcutoff mincsize
-	
+	args scale isContScale catcutoff mincsize nacode timelevs
+	 
 	*** Specify temp names for scalars and matrices
 	tempname vals freqs pCats nCats   
 			
@@ -230,7 +229,7 @@ program define _scaleItemCategorization, sclass
 	* noi di "Override: `userOverride'"
 	if (`userOverride' == 1) {
 		foreach item of local myscale {  // iterate over items of user-defined
-			capture tab `item', matrow(`vals')
+			capture tab `item' if `item' ~= `nacode', matrow(`vals')
 			if (_rc == 0) {  // if does not break
 				mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
 				if (`nCats' == 1)  {
@@ -266,7 +265,7 @@ program define _scaleItemCategorization, sclass
 			}
 			
 			*** Observed values
-			capture tab `item', matrow(`vals') matcell(`freqs')
+			capture tab `item' if `item' ~= `nacode', matrow(`vals') matcell(`freqs')
 			if (_rc == 0) {  // if does not break tab
 				mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
 
@@ -320,24 +319,24 @@ program define _scaleItemCategorization, sclass
 			}
 		} // end loop over items
 	} // end of else in userOverride
-	
-	* noi di "`finalScale'"
+
+	*** Store the total number of time points
+	local tlevs: word count `timelevs'
 	
 	*** Report results by scale
-	noi di _n "********************************************************" _n ///
-	"Summary of pre-imputation checks for scale `scale'*" _n  ///
-	"Constant items: `constant'" _n ///
-	"Binary items: `bin'" _n ///
-	"Multiple category items: `cat'" _n ///
-	"Continuous items: " _n ///
-	"      Auto detected: `cont'" _n ///
-	"      User defined : `cuscont'" _n ///
-	"*Excluded items*: " _n ///
-	"      Constant items: `constant'" _n ///
-	"      Categorical items with < `mincsize' obs in a category: `rare'"
-				
-	noi di in y _n "Filtered scale: `finalScale'"
-	noi di "********************************************************" _n
+	noi di in y _n "********************************************************" _n ///
+	"SUMMARY OF SCALE [`scale']" _n  ///
+	"    Number of items: `:word count `myscale'' (`=`:word count `myscale''/`tlevs'' per time point)" _n ///
+	"    Binary items: `:word count `bin''" _n ///
+	"    Multiple category items: `:word count `cat''" _n ///
+	"    Continuous items: " _n ///
+	"        Auto detected: `:word count `cont''" _n ///
+	"        User defined : `:word count `cuscont''" _n ///
+	"   *Excluded items*: " _n ///
+	"        Constant items: `constant'" _n ///
+	"        Items with level count < `mincsize': `rare'" _n ///	
+	"Final number of items: `:word count `finalScale''" _n ///
+	"********************************************************"
 	
 	sreturn local finalScale "`finalScale'"
 	sreturn local constant "`constant'"
@@ -609,274 +608,51 @@ program define _checkVarNameLength
 end
 
 
+*** Display function for variables included in the model
+capture program drop _displayAllVars
+program define _displayAllVars
 
+	args scales sadv covInvar covVar
+	
+	if "`scales'" ~= "" {
+		noi di in y _n "********************************************************" _n ///
+		"Scales in the imputation model:" _n ///
+		"      `scales'" _n ///
+		"<more information follows below> "
+		noi di "********************************************************"
+	}
+	else {
+		noi di _n in y "********************************************************" _n ///
+		"No scales in the imputation model "
+		noi di "********************************************************"	
+	}
+	
+	if "`sadv'" ~= "" {
+		noi di in y _n "********************************************************" _n ///
+		"Stand-alone dependent variables in the imputation model:" _n ///
+		"      `sadv'" 
+		noi di "********************************************************"
+	}
+	else {
+		noi di _n in y "********************************************************" _n ///
+		"No stand-alone variables in the imputation model "
+		noi di "********************************************************"	
+	}
+	
+	if ("`covInvar'" ~= "" | "`covVar'" ~= "") {
+		noi di _n in y "********************************************************" _n ///
+		"Covariates in the imputation model: " _n ///
+		"    Time-invariant: `covInvar'" _n ///
+		"    Time-variant  : `covVar'"
+		noi di "********************************************************"	
+	}
+	else {
+		noi di _n in y "********************************************************" _n ///
+		"No covariates in the imputation model "
+		noi di "********************************************************"	
+	}
+end
+	
+	
 
 exit
-
-
-
-
-/*
-
-capture program drop _parseConditions
-program define _parseConditions, sclass
-
-	args myinput type
-
-
-end
-
-	*** Disaggregate input for conditional imputation
-		_parseConditions `"`condimputed'"'
-		* noi sreturn list
-		
-		*** Collect all left and right sides
-		local lSide ""
-		local rSide ""
-		foreach el in `:s(macros)' {
-			if regexm("`el'", "^ifL_.+") { // left side
-				
-			}
-			else if regexm("`el'", "^ifR_.+") { // right side
-				local match "`s(`=regexs(0)')'"
-				if regexm("`match'", "(mean|sum)\(([a-zA-Z0-9_ ]+)\)") {
-					local condScale "`=regexs(2)'"
-					local inNameList: list miScale & condScale
-					if "`inNameList'" == "" {
-						noi di in r "Scale `condScale' specified in option condimputed() is not present in the model"
-						exit 489
-					}
-				}
-				else {
-					local rSide "`rSide' `match'"
-				}
-			}
-		}
-		
-		* noi di "`lSide'" _n "`rSide'"
-
-		*** Separates variables in the dataset from other stuff
-		local vars "`lSide' `rSide'"
-		local condVars ""
-		foreach i of local vars {
-			capture unab test: `i'
-			if !_rc { // no error
-				*** Add to variable list
-				local condVars "`condVars' `i'"
-			}
-		}
-				
-		local condVars: list uniq condVars  // remove repeats
-		
-		noi di "Conditioning variables: `condVars'"
-		exit
-		
-		
-		
-		*** Check whether cond vars are already present in the list of other vars
-		local checkCondVar: list condVars & miSadv
-		local checkCondVar: list condVars - checkCondVar
-		
-		* noi di "`checkCondVar'"
-		* noi di "`condVars'"
-		* noi di "`miDepVarsOriginal'"
-		
-		if "`checkCondVar'" != "" {
-			noi di in r "Variable(s) `checkCondVar' in conditional imputation is(are) not included in the model"
-			exit 489
-		}
-		
-*/
-
-
-*** Parser of the user input with multiple arguments of the type
-*** (sc1="logit, augment" sc2="pmm") and variations
-
-capture program drop _parse_model
-program define _parse_model, sclass
-
-	args myinput type 
-
-	local nlistex "[a-zA-Z]+[,]?[a-zA-Z0-9\(\)= ]*"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
-
-	while regexm(`"`myinput'"', `"`strregex'"') {
-		local scale `=regexs(0)'
-		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
-		gettoken sname model_opts: scale, parse("=")
-		gettoken left model_opts: model_opts, parse("=")
-		local model_opts = trim(`"`model_opts'"')
-		local model_opts = subinstr(`"`model_opts'"', `"""',"",.)
-		local model_opts = subinstr(`"`model_opts'"', `"'"',"",.)
-		local sname = trim("`sname'")
-		* noi di "`sname'"
-		*** Post result
-		sreturn local `sname'`type' `model_opts'
-	}
-end
-
-
-
-
-
-
-
-
-
-
-exit
-
-
-
-
-
-
-*** Compare elements of lists and print elements that differ
-capture program drop compare_lists
-program define compare_lists, sclass
-	args list1 list2
-	
-	local isect: list list1 & list2
-	local union: list list1 | list2
-	local lDiff: list union - isect // LONGER SHOULD BE FIRST!
-	* di "`lDiff'"
-	sreturn local differences `lDiff'
-
-end
-
-
-
-capture program drop _parse_ovar_model
-program define _parse_ovar_model, sclass
-	
-	args model
-	
-	noi di "`model'"
-	
-	gettoken eq opts: model, parse(",")
-	local ovar `:word 1 of `eq''
-	local ovar = trim("`ovar'")
-	
-	gettoken left covs: eq
-	local covs = trim("`covs'")
-	
-	gettoken right opts: opts, parse(",")
-	local opts = trim("`opts'")
-	
-	if regexm("`opts'", "omit\(([a-zA-Z0-9_.\* ]+)\)") {
-		local omitOpt `=regexs(0)'
-		local omitVars `=regexs(1)'
-	}
-	
-	if regexm("`opts'", "include\((([a-zA-Z0-9_.\* ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+)\)") {
-		local includeOpt `=regexs(0)'
-		local includeVars `=regexs(1)'
-		noi di "`includeVars'"
-		
-	}
-	
-	local remaningOpts = trim(subinstr("`opts'", "`includeOpt'","", .))
-	local remaningOpts = trim(subinstr("`remaningOpts'", "`omitOpt'","", .))
-		
-	* noi di "`omitOpt'"
-	* noi di "`includeOpt'"
-	
-	sreturn local depv "`ovar'"
-	sreturn local covs "`covs'"
-	sreturn local opts "`opts'"
-	sreturn local includeVars "`includeVars'"
-	sreturn local omitVars "`omitVars'"
-	sreturn local remaningOpts "`remaningOpts'"
-	
-	
-	* noi di "`includeVars'"
-	* noi di "`ovar'"
-	* noi di "`covs'"
-	* noi di "`opts'"
-	
-end
-
-/*
-*** Parses input anything 
-capture program drop _input_parser
-program define _input_parser, sclass
-
-	args input_string
-	
-	sreturn clear
-	
-	local regex_scale "^[a-zA-Z0-9_ ]+"
-	local model_exp "([a-zA-Z0-9_]+[a-zA-Z0-9_. ]*[ ]?)"
-	local opts_exp "(,[ ]*([a-zA-Z]+([ ]|\(([a-zA-Z0-9_. ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+\)[ ]?|))+)?"
-		
-	local regex_model "`model_exp'`opts_exp'"
-	
-	if regexm(`"`input_string'"', `"`regex_scale'"') {
-		local namelist `= regexs(0)'
-		local input_string = trim(subinstr(`"`input_string'"', `"`namelist'"', "", 1))
-		
-		sreturn local namelist "`namelist'"
-	}
-	
-	local count = 1
-	while regexm(`"`input_string'"', `"`regex_model'"') {
-		local expression `= regexs(0)'
-		local input_string = trim(subinstr(`"`input_string'"', `"(`expression')"', "", .))
-		sreturn local ovar`count' `=regexs(0)'
-		local ++count
-		
-	}
-end
-
-
-*** Parser of sadv_models
-capture program drop _parse_ovar_model
-program define _parse_ovar_model, sclass
-	
-	args model
-		
-	gettoken eq opts: model, parse(",")
-	local ovar `:word 1 of `eq''
-	local ovar = trim("`ovar'")
-	
-	gettoken left covs: eq
-	local covs = trim("`covs'")
-	
-	gettoken right opts: opts, parse(",")
-	local opts = trim("`opts'")
-	
-	if regexm("`opts'", "omit\(([a-zA-Z0-9_. ]+)\)") {
-		local omitOpt `=regexs(0)'
-		local omitVars `=regexs(1)'
-	}
-	
-	if regexm("`opts'", "include\((([a-zA-Z0-9_. ]+|mean\([a-zA-Z0-9_ ]+\)|sum\([a-zA-Z0-9_ ]+\))+)\)") {
-		local includeOpt `=regexs(0)'
-		local includeVars `=regexs(1)'
-		noi di "`includeVars'"
-		
-	}
-	
-	local remaningOpts = trim(subinstr("`opts'", "`includeOpt'","", .))
-	local remaningOpts = trim(subinstr("`remaningOpts'", "`omitOpt'","", .))
-		
-	* noi di "`omitOpt'"
-	* noi di "`includeOpt'"
-	
-	sreturn local depv "`ovar'"
-	sreturn local covs "`covs'"
-	sreturn local opts "`opts'"
-	sreturn local includeVars "`includeVars'"
-	sreturn local omitVars "`omitVars'"
-	sreturn local remaningOpts "`remaningOpts'"
-	
-	
-	* noi di "`includeVars'"
-	* noi di "`ovar'"
-	* noi di "`covs'"
-	* noi di "`opts'"
-	
-end
-*/
-
-

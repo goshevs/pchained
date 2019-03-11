@@ -16,6 +16,7 @@
 *** CONDComplete = imputation subject to conditioning on a exogenous/complete covariate
 *** CATCutoff    = max number of categories/levels to classify as categorical; if fails --> classified as continuous
 *** MINCsize     = minium cell size required for item to be included in analysis; if fails --> classified as rare
+*** NAcode       = code for non-applicable observations (whenever conditioning is involved)
 *** MIOptions    = mi impute chained options to be passed on (by() is also allowed)
 *** MERGOptions  = merge options to be passed on to merge upon merging the imputed data with the original data	
 *** SAVEmidata   = save the mi data; valid path and filename required
@@ -36,6 +37,7 @@ program define pchained, eclass
 						      [MODel(string asis) COMMONcov(string asis) ///
 							   CONDImputed(string asis) CONDComplete(string asis)  ///
 							   CATCutoff(integer 10)  MINCsize(integer 0) ///
+							   NAcode(integer -9999999) ///
 							   MIOptions(string asis) MERGOptions(string asis) ///
 							   SAVEmidata(string) PRINTmodel suspend debug] // USELabels
 
@@ -120,11 +122,11 @@ program define pchained, eclass
 		local allOutcomes "`miScale' `miSadv'"
 		
 		*** Model inputs are identified
-		noi di "All outcomes: `allOutcomes'"
-		noi di "Scales: `miScale'"
-		noi di "Continuous scales: `isContScale'"	
-		noi di "SADvariables: `miSadv'"
-		noi di "Model covariates: `miModelCovs'"	
+		* noi di "All outcomes: `allOutcomes'"
+		* noi di "Scales: `miScale'"
+		* noi di "Continuous scales: `isContScale'"	
+		* noi di "SADvariables: `miSadv'"
+		* noi di "Model covariates: `miModelCovs'"	
 		
 		*** Covariate collection
 		*** Collect all covariates and check for duplication and miss-specification
@@ -134,15 +136,15 @@ program define pchained, eclass
 		local allCovs "`commonCov' `miModelCovs'"
 		local allCovs: list uniq allCovs
 		
-		noi di "Common covariates: `commonCov'"
-		noi di "Full set of covariates: `allCovs'"
+		* noi di "Common covariates: `commonCov'"
+		* noi di "Full set of covariates: `allCovs'"
 
 		*** <><><> Check for duplication (factor vs non-factor)
 		fvrevar `allCovs', list
 		local covarCheck "`r(varlist)'"
 		
-		local listUnique: list uniq covarCheck  // 
-		noi di "List of unique covariates: `listUnique'"
+		local listUnique: list uniq covarCheck
+		* noi di "List of unique covariates: `listUnique'"
 		local myTest: list covarCheck - listUnique
 
 		if "`myTest'" ~= "" {
@@ -177,7 +179,6 @@ program define pchained, eclass
 				ren `item' `item'_`timevar'
 			}
 		}
-		**** Scale items have been renames in the dataset and in the reshape local
 		
 		*** >>> SADV	
 		
@@ -192,13 +193,7 @@ program define pchained, eclass
 					exit 111
 				}
 		}
-				
-		noi di _n "********************************************************" _n ///
-		"Stand-alone dependent variables included in the imputation model:" _n ///
-		"      `miSadv'" 
-		noi di "********************************************************" _n ///
-		
-		
+
 		*** >>> COVARIATES
 
 		if "`allCovs'" ~= "" {  // if covariates are specified
@@ -226,15 +221,7 @@ program define pchained, eclass
 					local covInvar "`covInvar' `covar'"
 				}
 			}	
-		
-			*** Report covariates
-			noi di _n in y "********************************************************"
-			noi di in y "Covariates: "
-			noi di in y "    Time-invariant: `covInvar'"
-			noi di in y "    Time-variant  : `covVar'"
-			noi di "********************************************************"	
-			
-			
+				
 			*** Rename time variant covariates to facilitate reshape
 			local covVarRS ""
 			foreach cv of local covVar {
@@ -246,14 +233,9 @@ program define pchained, eclass
 			local covarsRS "`covVarRS' `covInvar'"
 			
 		}
-		else {  // if no covariates
-			noi di _n in y "********************************************************"
-			noi di in y "No covariates included in the imputation models "
-			noi di "********************************************************"		
-		}
 		
-		* noi di "Covariates for reshape: `covarsRS'"
-		*** All covariates are ready for reshape
+		*** Displaying all variables
+		noi _displayAllVars "`miScale'" "`miSadv'" "`covInvar'" "`covVar'"
 		
 		
 		*** >>> TIMEVAR
@@ -403,7 +385,7 @@ program define pchained, eclass
 				
 			if `:list depVarMod in miScale' {            // building the list of items of the scale at all time points
 				*** Categorize the items of the scale
-				noi _scaleItemCategorization "`depVarMod'" "`isContScale'" "`catcutoff'" "`mincsize'"
+				noi _scaleItemCategorization "`depVarMod'" "`isContScale'" "`catcutoff'" "`mincsize'" "`nacode'" "`timelevs'"
 				local dVarList "`s(finalScale)'"  // building the items of the scale (for all time points)
 				local itemsBin "`s(bin)'"
 				local itemsMCat "`s(mCat)'"
