@@ -5,31 +5,23 @@
 *
 *
 *
-*
-*
 
 *** SYNTAX ***
-*** anything     = unique stub names of the scale(s) to be imputed (takes multiple scales)
+*** anything     = models for scales and sadv
 *** Ivar         = cluster identifier (i.e. person, firm, country id)
 *** Timevar      = time/wave identifier
-*** CONTinous    = stub names of scales whose items should be treated as continuous
-*** SCOREtype    = mean score (default) or sum score
-*** COMCOVars    = list of covariates used for scale and stand-alone variable imputation, supports factor variable syntax 
-*R** ADDSADepvars = list of stand-alone varaibles to be imputed together with the scale items
-*** MIOptions    = mi impute chained options to be passed on (by() is also allowed)
+*** MODel        = user controls the imputation model used for scales and sadv
+*** COMMONcov    = list of commn covariates in scale and sadv models, supports factor variable syntax and wildcards 
+*** CONDImputed  = conditional imputation as per Stata's manual (endogenous vars) 
+*** CONDComplete = imputation subject to conditioning on a exogenous/complete covariate
 *** CATCutoff    = max number of categories/levels to classify as categorical; if fails --> classified as continuous
 *** MINCsize     = minium cell size required for item to be included in analysis; if fails --> classified as rare
+*** MIOptions    = mi impute chained options to be passed on (by() is also allowed)
 *** MERGOptions  = merge options to be passed on to merge upon merging the imputed data with the original data	
-*** MODel        = user controls the imputation model used for a specific scale
 *** SAVEmidata   = save the mi data; valid path and filename required
 *** PRINTmodel   = prints the imputation model
-*** suspend      = 
-*** CONDImputed  = conditional imputation as per Stata's manual (endogenous vars) 
-*** CONDComplete = imputation subject to conditioning on a complete variable
-*D** SCALEInclude = 
-*D** SCALEOmit    = 
-*** FULLscales   = by-passing Plumpton
-*** debug        = undocumented option: interrupts execution after reshape
+*** suspend      = terminate execution immediately before imputation
+*** debug        = interrupts execution after reshape
 *** USELabels    = use labels of item/scale if exist to classify items 	(not in use)
 
 ********************************************************************************
@@ -41,19 +33,18 @@ capture program drop pchained
 program define pchained, eclass
 
 	syntax anything [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
-						      [CONTinous(namelist) ///
-							   MIOptions(string asis) CATCutoff(integer 10) ///
-						       MINCsize(integer 0) MERGOptions(string asis) ///
-							   MODel(string asis) CONDImputed(string asis) ///
-							   CONDComplete(string asis) COMMONcov(string asis) ///
-							   SAVEmidata(string) PRINTmodel suspend debug] // USELABels
+						      [MODel(string asis) COMMONcov(string asis) ///
+							   CONDImputed(string asis) CONDComplete(string asis)  ///
+							   CATCutoff(integer 10)  MINCsize(integer 0) ///
+							   MIOptions(string asis) MERGOptions(string asis) ///
+							   SAVEmidata(string) PRINTmodel suspend debug] // USELabels
 
 	*** Warn user they need moremata
 	no di in gr "Warning: this program requires package moremata."
 	qui {
 		
 		************************************************************************
-		**** Specification of defaults
+		**** Assigning default values
 		
 		*** Default scoretype to mean
 		if "`scoretype'" == "" local scoretype "mean"
@@ -298,7 +289,7 @@ program define pchained, eclass
 		
 		*** +++ Undocumented feature: stop execution to debug after reshaping
 		if ("`debug'" ~= "") {
-			noi di "Debugging suspension requested."
+			noi di "Debugging termination requested."
 			exit
 		}
 		
@@ -310,8 +301,7 @@ program define pchained, eclass
 		local miComCovList "`s(expandedList)'"
 		
 		* noi di "`commoncov'"      // common covariates as enter into the syntax
-		* noi di "`miComCovList'"   // commonc covariates as enter the model
-		
+		* noi di "`miComCovList'"   // common covariates as enter the model
 		
 		************************************************************************
 		*** Building the model
@@ -358,25 +348,36 @@ program define pchained, eclass
 			
 			*** --- Collect OMITTED variables
 			
-			local miOmitList ""
+			local miOmitListPlain ""
 			if "`miOmitVars'" ~= "" {
 				*** Build list of omitted vars
 				foreach var of local miOmitVars {
 					*** Check if asked to omit a variable not present in the model
 					capture fvunab fullList: `var'*
 					if _rc {
-						noi di in r "Variable(s) `var' cannot be omited because it is not included in the model"
+						noi di in r "Variable(s) `var' cannot be omitted because it is not included in the model"
 						error 486
 					}
-					local miOmitList "`miOmitList' `fullList'"
+					local miOmitListPlain "`miOmitListPlain' `fullList'"
 				}
 			}
-			* noi di "`miOmitVars'"   // omited variables as enter into the syntax
-			* noi di "`miOmitList'"   // omited variables as enter the model
+
+			*** Restrict the list of omitted vars to vars in the common covariates list
+			local miOmitList ""
+			foreach comCovar of local miComCovList {
+				fvrevar `comCovar', list
+				local varPlain "`r(varlist)'"
+				if `:list varPlain in miOmitListPlain' {
+					local miOmitList "`miOmitList' `comCovar'"
+				}
+			}	
+
+			* noi di "`miOmitVars'"   // omitted variables as enter into the syntax
+			* noi di "`miOmitList'"   // omitted variables as enter the model
 			
 	
 			
-			*** --- BUILDING THE SYNTAX ---
+			*** --- BUILDING THE INPUT ---
 
 			local dVarList ""     // list of all scale items/variables across all time periods
 
@@ -384,12 +385,14 @@ program define pchained, eclass
 			local sumList ""      // list of sums
 			local rIncVarList ""  // list of remaining included variables
 			local rDepVars ""     // list of remaining included vars as required by mi impute chained
+			local rIncVarListFinal "" // final list of included variables as required by mi impute chained
 			
 			local condImp ""      // condition for conditional imputation
 			local condComp ""     // condition for imputation on exogenous/complete predictor
 
 			local scale ""        // only populated if var is a scale
-				
+
+			
 				
 			if `:list depVarMod in miScale' {            // building the list of items of the scale at all time points
 				*** Categorize the items of the scale
@@ -424,18 +427,17 @@ program define pchained, eclass
 				* noi di "Condition: `condComp'"
 
 				
-				*** Collect all other but current timepoints of dVar	
+				*** Collect all but current timepoints of dVar	
 				local dVarRemaining: list dVarList - dVar
 				local dVarComplement ""
 				foreach myVar of local dVarRemaining {
 					local dVarComplement "`dVarComplement' (`myVar')"
 				}
 	
-	
 				*** Create the INCLUDE variable lists
 				if "`miIncVars'" ~= "" {					
 
-					if !regexm("`miOpts'", "noimputed") { // include() implies nonimputed 
+					if !regexm("`miOpts'", "noimputed") { // include() implies noimputed 
 						local miOpts "`miOpts' noimputed"
 					}
 				
@@ -492,7 +494,6 @@ program define pchained, eclass
 						local rIncVarListUpdated: list rIncVarListUpdated - depVarMod // remove current outcome from list
 					
 						*** Create the final complete list of included variables
-						local rIncVarListFinal ""
 						foreach finalVar of local rIncVarListUpdated {
 							unab collection: `finalVar'*
 							local rIncVarListFinal "`rIncVarListFinal' `collection'"
@@ -502,7 +503,6 @@ program define pchained, eclass
 				}  // end of INCLUDE
 				
 				*** Write out the include varlist as required by -mi impute chained-
-				local rDepVars ""
 				if "`rIncVarListFinal'" ~= "" { 
 					foreach mydVar of local rIncVarListFinal {
 						local rDepVars "`rDepVars' (`mydVar')"
@@ -510,7 +510,8 @@ program define pchained, eclass
 				}
 						
 				*** Write out the INCLUDE option as it should enter the model
-				local includeOpt "`miCovWide' `meanList' `sumList'"
+							
+				local includeOpt "`miCovList' `meanList' `sumList'"
 				if regexm("`miOpts'", "noimputed") {
 					*** If no imputed variables will be included, add remaining outcomes and dependent vars
 					local includeOpt "`dVarComplement' `rDepVars' `includeOpt'"

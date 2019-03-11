@@ -559,17 +559,23 @@ end
 capture program drop _createAllPeriods
 program define _createAllPeriods, sclass
 	
-	args inputList timevar
+	args inList timevar
 	
 	local outList ""
-	if "`inputList'" ~= "" {
-		foreach var of local inputList {
-			fvunab placeholder: `var'*					
+	if "`inList'" ~= "" {
+		foreach var of local inList {
+			fvunab placeholder: `var'*	
+			local outList "`outList' `placeholder'"
+			
+			/*
+			*** Include only variables that have the `var' part or `var'_timevar part
 			foreach myVar of local placeholder {
 				if regexm("`myVar'", "`var'(_`timevar'[0-9]+)?$") {
+					noi di "`myVar'"
 					local outList "`outList' `myVar'"
 				}
 			}
+			*/
 		}	
 	}
 	
