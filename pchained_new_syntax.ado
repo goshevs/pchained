@@ -159,7 +159,6 @@ program define pchained, eclass
 			exit 489
 		}
 		
-	
 		************************************************************************
 		**** Pre-processing for reshape
 
@@ -167,6 +166,7 @@ program define pchained, eclass
 		
 		*** Collecting and renaming items across all scales for reshape
 		local scaleItemsRS ""
+		local scaleNameCheck ""
 		foreach scale of local miScale {  // loop over scales
 			capture unab myItems: `scale'*
 			
@@ -175,6 +175,8 @@ program define pchained, eclass
 				di in r "Stub `scale' is not associated with a scale (does not identify a set of variables in the dataset)"
 				exit 111
 			}
+			
+			local scaleNameCheck "`scaleNameCheck' `myItems'"
 			
 			*** Rename items in dataset and in the locals to facilitate reshape
 			foreach item of local myItems {
@@ -192,21 +194,28 @@ program define pchained, eclass
 			local miSadvRS "`miSadvRS' `var'_`timevar'"
 			ren `var' `var'_`timevar'
 		}
+				
+		noi di _n "********************************************************" _n ///
+		"Stand-alone dependent variables included in the imputation model:" _n ///
+		"      `miSadv'" 
+		noi di "********************************************************" _n ///
+		
 		
 		*** >>> COVARIATES
 
 		if "`allCovs'" ~= "" {  // if covariates are specified
+			
 			*** Extract covariate names from covariate list (which may be fvvarlist)
 			fvrevar `allCovs', list
-			local covars "`r(varlist)'"
+			local plainCovs "`r(varlist)'"
 			
 			*** Obtain a list of unique names
-			local covars: list uniq covars  // use for checking conditions
+			local plainCovs: list uniq plainCovs  // use for checking conditions
 		
 			*** Separate time invariant from time variant covariates
 			local covInvar ""
 			local covVar ""
-			foreach covar of local covars {
+			foreach covar of local plainCovs {
 				tempvar mytest
 				sort `ivar' `timevar'
 				bys `ivar': egen `mytest' = mean(`covar')
@@ -263,20 +272,23 @@ program define pchained, eclass
 		
 		*** Checking condcomplete() for invalid inputs
 		sreturn clear
-		_isInModel `"`condcomplete'"' "" "`miScale'" "`miSadv'" "`covars'"
+		_isInModel `"`condcomplete'"' "" "`miScale'" "`miSadv'" "`plainCovs'"
 
 			
 		
 		************************************************************************
 		*** Subsetting the data to only variables used in the model
 
+		*** <><><> Check for long names
+		noi _checkVarNameLength "`scaleNameCheck' `miSadv' `plainCovs'" "`timevar'" "29"   // see manual for limits
+				
 		*** Keep only variables of interest	
 		keep `scaleItemsRS' `miSadvRS' `covarsRS' `ivar' `timevar' `byGroup' `exp'
 		
 		
 		************************************************************************
 		*** Reshaping the data
-			
+		
 		*** Reshape to wide
 		noi di _n in y "Reshaping to wide..."
 		reshape wide `scaleItemsRS' `miSadvRS' `covVarRS', i(`ivar') j(`timevar')
@@ -291,35 +303,30 @@ program define pchained, eclass
 		}
 		
 		************************************************************************
-		*** Parsing option MODel
+		*** Creating the list of common covariates
 		
-		/*
-		if `"`model'"' ~= `""' {
-			* noi di `"`model'"'
-			_parseMODel `"`model'"' "_model"  // gives s(`scale'_model)
-		}
-		* noi sreturn list
-		*/
+		local miComCovList ""
+		_createAllPeriods "`commoncov'" "`timevar'"
+		local miComCovList "`s(expandedList)'"
 		
-		
-		noi di _n "********************************************************" _n ///
-			"Stand-alone dependent variables included in the imputation model:" _n ///
-			"      `miSadv'" 
-			noi di "********************************************************" _n ///
-		
+		* noi di "`commoncov'"      // common covariates as enter into the syntax
+		* noi di "`miComCovList'"   // commonc covariates as enter the model
 		
 		
 		************************************************************************
-		*** Parsing anything and build the models
-	
+		*** Building the model
+		
+		*** Store the complete list of dependent variables
+		local depVarCompleteList ""
+		
 		_parseAnything "`anything'"
-		* noi sreturn list
 		
 		local iterModels = 1
 		while `"`s(model`iterModels')'"' ~= "" {
+
 			*** Parse the syntax of the model
 			_parseModels "`s(model`iterModels')'"
-			* noi sreturn list
+
 			local miCovVar "`s(covs)'"            // collect covariates
 			local miIncVars "`s(includeVars)'"    // collect other depVars/means/sums of scales
 			local miOmitVars "`s(omitVars)'"      // collect omit
@@ -343,20 +350,11 @@ program define pchained, eclass
 			*** --- Collect COVARIATES from all time-periods
 			
 			local miCovList ""
-			if "`miCovVar'" ~= "" {
-				foreach var of local miCovVar {
-					fvunab placeholder: `var'*					
-					foreach myVar of local placeholder {
-						if regexm("`myVar'", "`var'(_`timevar'[0-9]+)?$") {
-							local miCovList "`miCovList' `myVar'"
-						}
-					}
-				}	
-			}
-
+			_createAllPeriods "`miCovVar'" "`timevar'"
+			local miCovList "`s(expandedList)'"
+			
 			* noi di "`miCovVar'"    // covariates as enter into the syntax
 			* noi di "`miCovList'"   // covariates as enter the model
-			
 			
 			*** --- Collect OMITTED variables
 			
@@ -380,12 +378,12 @@ program define pchained, eclass
 			
 			*** --- BUILDING THE SYNTAX ---
 
-			local dVarList ""     // list of all scale items/variables across time periods
+			local dVarList ""     // list of all scale items/variables across all time periods
 
 			local meanList ""     // list of means
 			local sumList ""      // list of sums
-			local rIncVarList ""  // list of other included variables
-			local rDepVars ""     // list of other included vars as required by mi impute chained
+			local rIncVarList ""  // list of remaining included variables
+			local rDepVars ""     // list of remaining included vars as required by mi impute chained
 			
 			local condImp ""      // condition for conditional imputation
 			local condComp ""     // condition for imputation on exogenous/complete predictor
@@ -407,9 +405,10 @@ program define pchained, eclass
 				unab dVarList: `depVarMod'*             // building the list of sadv at all time points
 			}
 			
+			*** Collect all dVarLists
+			local depVarCompleteList "`depVarCompleteList' `dVarList'"
+
 			*** Outcomes in all time periods
-			* noi di "`dVarList'"
-		
 			foreach dVar of local dVarList {
 				 
 				*** +++ Incorporate imputation subject to conditions, if provided
@@ -423,7 +422,16 @@ program define pchained, eclass
 				
 				* noi di "Conditional imputation: `condImp'"
 				* noi di "Condition: `condComp'"
-			
+
+				
+				*** Collect all other but current timepoints of dVar	
+				local dVarRemaining: list dVarList - dVar
+				local dVarComplement ""
+				foreach myVar of local dVarRemaining {
+					local dVarComplement "`dVarComplement' (`myVar')"
+				}
+	
+	
 				*** Create the INCLUDE variable lists
 				if "`miIncVars'" ~= "" {					
 
@@ -552,97 +560,82 @@ program define pchained, eclass
 				if "`miOmitList'" ~= "" {
 					local omitOpt "omit(`miOmitList')"
 				}
-				
-				*** Collect all other but current timepoints of dVar	
-				local dVarRemaining: list dVarList - dVar
-				local dVarComplement ""
-				foreach myVar of local dVarRemaining {
-					local dVarComplement "`dVarComplement' (`myVar')"
-				}
-	
+			
 				*** Write out the MODEL for dVar
 				local miModel "`miModel' (`userModelVar' `miOpts' `includeOpt' `omitOpt' `condImp') `dVar' "
 				* noi di _n "`miModel'"
-				*exit
 				
 			}
 			local ++iterModels
 			_parseAnything "`anything'"
 		}
 
-	*noi di "`miModel'"
-	
-	exit
-	
-	
-	*** Here we need to identify the common covariates in the models and check againts commonCov
-    *** FIX WEIGHTING AND FIX COMMON COVARIATES
-	
-	
-	
-		/*
-				**** By Zitong: adding sampling weight. The syntax is a little bit lengthy but more clear 
-			if "`weight'" ~= "" {
-				local model_endpart "= `covars_wide' [`weight'=`exp'], `mioptions'"  // covars weight and mioptions
-			}
-			else {
-				local model_endpart "= `covars_wide', `mioptions'"	// covars , and mioptions			
-			}
+		*** Write out WEIGHT syntax
+		local weightOpt ""
+		if "`weight'" ~= "" {
+			local weightOpt "[`weight'=`exp']"
 		}
-		else {
-			if "`weight'" ~= "" {
-				local model_endpart "[`weight'=`exp'], `mioptions'"  // weight, and mioptions
-			}
-			else {
-				local model_endpart ", `mioptions'" // Just mioptions			
-			} 
-		}	
 		
-*/
-
-	exit
-	
+		*** Include COMMONCOV as required by -mi impute chained-
+		if "`commoncov'" ~= "" {
+			local miComCovList "= `miComCovList'"
+		}
+		
+		************************************************************************
+		*** Creating the complete model syntax
+		
+		*** Write out the end of the model
+		local miModelEndString "`miComCovList' `weightOpt', `mioptions'"
+		
 		*** Write out the complete model
-
-		local model_full "`mymodel' `model_endpart'"
+		local modelComplete "`miModel' `miModelEndString'"
 		
-		*** Print the full model (useful for debigging)
+		
+		************************************************************************
+		*** Helpful debugging options		
+		
+		*** Printing the complete model (useful for debigging)
 		if "`printmodel'" ~= "" {
-			
-			noi di _n in y "Printing the full imputation model..."
-			noi di _n "`model_full'" 
-			
-			if "`suspend'" ~= "" {
-				noi di _n in y "Suspending -pchained-... done"	
-				exit
-			}
+			noi di _n in y "Printing the complete imputation model..."
+			noi di _n "`modelComplete'" 
 		}
-			
-		*** mi set the data
+		
+		*** Suspending the execution of the program if requested by user
+		if "`suspend'" ~= "" {
+			noi di _n in y "Suspending -pchained-... done"	
+			exit			
+		}
+		
+		************************************************************************
+		*** Implementing imputation using -mi impute chained-
+		
+		*** Set data as mi
 		mi set flong
 		
-		*** register all imputed variables
-		foreach scale of local namelist {
-			mi register imputed `scale'*
-		}
-		foreach depVar of local miDepVars {
-			mi register imputed `depVar'*
-		}
+		*** Register all imputed variables
+		mi register imputed `depVarCompleteList'
 		
-		
-		*** mi impute chained
+		*** Run -mi impute chained-
 		noi di _n in y "Performing multiple imputation..."
 		
-		noi mi impute chained `model_full'
+		noi mi impute chained `modelComplete'
 
-		*** reshape to long
-		mi reshape long `allitemsrs' `miDepVars' `cov_var_rs', i(`ivar') j(`timevar')
 		
-		*** rename vars to original names
-		noi di "`miDepVars'"
-		noi di "`allitemsrs' `miDepVars'"
-		foreach var of varlist `allitemsrs' `miDepVars' `cov_var_rs' {
-			ren `var' `=subinstr("`var'", "_`timevar'","",.)'
+		************************************************************************
+		*** Manage dataset after imputation
+		
+		*** Reshape to long
+		mi reshape long `scaleItemsRS' `miSadvRS' `covVarRS', i(`ivar') j(`timevar')
+
+		*** Rename variables to pre-reshape names
+		foreach var of varlist `scaleItemsRS' `miSadvRS' `covVarRS' {
+			if regexm("`var'", ".+(_`timevar')$") {
+				ren `var' `=subinstr("`var'", "`=regexs(1)'","",.)'
+			}
+			else {
+				noi di in r "Error renaming `var'"
+				exit 486
+			}
 		}
 		
 		*** Save the data
@@ -651,27 +644,13 @@ program define pchained, eclass
 			save "`savemidata'", replace
 		}
 		
-		* restore
-		
 		*** Merge the midata into the original dataset
-		*mi set flong
 		noi di _n in y "Merging imputed dataset with original dataset..."
 		noi mi merge m:1 `ivar' `timevar' using "`originaldata'" `mergoptions'
-		*mi merge 1:m `ivar' `timevar' using "`savemidata'", keep(match)
 		mi update
 		
 		noi di _n in y "Imputation finished successfully."
 
-		
-		*** Return useful macros
-		ereturn local constantItems "`constant'"
-		ereturn local binaryItems  "`bin'"
-		ereturn local multiCategoryItems "`cat'"
-		ereturn local autoContinuousItems "`cont'"
-		ereturn local userContinuousItems "`cuscont'"
-		ereturn local rareItems "`rare'"
-		ereturn local imputedItems "`finalScale'"
-		
 	} // end of quietly
 	
 end

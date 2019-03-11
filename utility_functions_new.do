@@ -152,25 +152,19 @@ program define _isInModel, sclass
 					}
 				}
 				else { // is it an endogenous/covariate variable?
-					if "`type'" == "cImp" {
+					if "`type'" == "cImp" {   // if endogenous
 						local mylist "`miSadv'"
 						local printType "condimputed()"
 					}
-					else {
+					else {                    // if complete covariate
 						local mylist "`covars'"
 						noi di "My covariates: `covars'" 
 						local printType "condcomplete()"
 					}
-					capture confirm v `match'
-					if _rc {
-						capture confirm n `match'  // conditoins have to be numeric!!!
-						if _rc {
-							noi di in r "Variable `match' specified in option `printType' is not present in the model"
-							exit 489
-						}	
-					}
-					else {	
-						if !`:list match in mylist' {
+					
+					capture confirm n `match'   // check whether match is numeric
+					if _rc {                    // if match is not numeric
+						if !`:list match in mylist' {  // if not in respective list
 							noi di in r "Variable `match' specified in option `printType' is not present in the model"
 							exit 489
 						}
@@ -560,6 +554,56 @@ program define _imputationS2Cond, sclass
 	}
 	
 end
+
+*** Create a list of variables for all periods
+capture program drop _createAllPeriods
+program define _createAllPeriods, sclass
+	
+	args inputList timevar
+	
+	local outList ""
+	if "`inputList'" ~= "" {
+		foreach var of local inputList {
+			fvunab placeholder: `var'*					
+			foreach myVar of local placeholder {
+				if regexm("`myVar'", "`var'(_`timevar'[0-9]+)?$") {
+					local outList "`outList' `myVar'"
+				}
+			}
+		}	
+	}
+	
+	sreturn local expandedList "`outList'"
+	
+end
+
+
+*** Check variable name length
+capture program drop _checkVarNameLength
+program define _checkVarNameLength
+	
+	args allVars timevar allowedLen
+	qui {
+		local timeVarLen = length("`timevar'")
+			
+		sum `timevar'
+		local timeLen =length("`r(max)'")
+		
+		foreach var of local allVars {
+			local varNameLen = length("`var'")
+			local newVarLen = `varNameLen' + `timeVarLen' + `timeLen' + 1
+			if (`newVarLen' > `allowedLen') {
+				noi di _n in r "Please, shorten the name of variable `var' to "
+				noi di _c "less than `=`allowedLen' - (`timeVarLen' + `timeLen' + 1)' characters."
+				noi di _n "Alternatively, you may wish to shorten the name of '`timevar'' and try again."
+				exit 489
+			}
+		}
+	}
+end
+
+
+
 
 exit
 
