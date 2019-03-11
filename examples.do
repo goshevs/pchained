@@ -12,124 +12,173 @@
 clear
 set more off
 
-*******************
+********************************************************************************
 ***  One scale  ***
 
-*** Categorical items
-simdata 500 3
-pchained s1_i, i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) 
-
-*** Treat items as continuous
+*** Categorical items, no covariates
 simdata 200 3
-pchained s1_i, i(id) t(time) cont(s1_i) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained (s1_i, noimputed scale), ///
+		  i(id) t(time) ///
+		  mio(add(1) chaindots rseed(123456) dryrun)
+		  
+*** Categorical items plus covariates
+simdata 200 3
+pchained (s1_i, noimputed scale), ///
+		  i(id) t(time) ///
+		  common(x1 i.x2 x3 y1) ///
+		  mio(add(1) chaindots rseed(123456) dryrun)
+
+*** Categorical items as continuous
+simdata 200 3
+pchained (s1_i, noimputed scale cont), ///
+		  i(id) t(time) ///
+		  common(x1 i.x2 x3 y1) ///
+		  mio(add(1) chaindots rseed(123456) dryrun)
+
+*** Items continuous by design
+simdata 200 3
+pchained (s4_i, noimputed scale), ///
+		  i(id) t(time) ///
+		  common(x1 i.x2 x3 y1) ///
+		  mio(add(1) chaindots rseed(123456) dryrun) 
 
 *** Items continuous by design (imputation model defined by user)
 simdata 200 3
-pchained s4_i, i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) /// 
-               mod(s4_i = "pmm, knn(3)")
+pchained (s4_i, noimputed scale), ///
+		  i(id) t(time) ///
+		  common(x1 i.x2 x3 y1) ///
+		  mod(s4_i = "pmm, knn(3)") ///
+		  mio(add(1) chaindots rseed(123456) dryrun) 
 
 
-*******************
+		    
+********************************************************************************
 *** Two scales  ***
 
 *** Categorical items
+**** In s1_i include the sum of s3_i
+**** In s3_i include the mean of s1_i
 simdata 500 3
-pchained s1_i s3_i, i(id) t(time) comcov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456)) print suspend
+pchained (s1_i, noimputed include(sum(s3_i)) scale) ///
+		 (s3_i, noimputed include(mean(s1_i)) scale), ///
+		 i(id) t(time) ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
+		 
 
-
-*** Treat some scales as continuous
+*** Scale s2_i as continuous
 simdata 500 3
-pchained s1_i s2_i, i(id) t(time) cont(s2_i) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained (s1_i, noimputed include(mean(s2_i)) scale) ///
+		 (s2_i, noimputed include(mean(s1_i)) scale cont), ///
+		 i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
+		 
 
-*** Some scales/items continuous by design (imputation models defined by user)
+*** Include model-specific regressors and omit some common covariates
 simdata 500 3
-pchained s2_i s4_i, i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) ///
-                    mod(s2_i = "ologit" s4_i = "pmm, knn(3)")
+pchained (s2_i, noimputed include(mean(s4_i)) scale) ///
+		 (s4_i x5, noimputed include(sum(s2_i)) scale omit(x*)), ///
+		 i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
+		 
 
 
-********************
+********************************************************************************
 *** Three scales ***
 
 *** Categorical items
 simdata 500 3
-pchained s1_i s2_i s3_i, i(id) t(time) comcov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
-
-
-*** Treat some scales as continuous
+pchained (s1_i, noimputed include(sum(s2_i s3_i)) scale) ///
+		 (s2_i, noimputed include(sum(s1_i s3_i)) scale) ///
+		 (s3_i, noimputed include(sum(s1_i s2_i)) scale), ///
+		 i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
+		 
+*** Assign s1_i as continuous, add model-specific covariates, different scale scores
 simdata 500 3
-pchained s1_i s2_i s3_i, i(id) t(time) cont(s2_i) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained (s1_i, noimputed include(sum(s2_i s3_i)) scale cont) ///
+		 (s2_i x4 x5, noimputed include(sum(s1_i) mean(s3_i)) scale) ///
+		 (s3_i x5, noimputed include(sum(s1_i s2_i)) scale), ///
+		 i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
 
 
-*** Some scales/items continuous by design
-simdata 500 3
-pchained s1_i s3_i s4_i, i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots)
 
-
-*** Mixed, s4_i by design is cont, s2_i user defined as cont
-simdata 500 3
-pchained s1_i s2_i s4_i, i(id) t(time) cont(s2_i) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
-
-
-********************
+********************************************************************************
 ***   By group   ***
 
 simdata 1000 3
-pchained s1_i s4_i, i(id) t(time) comcov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots by(group) rseed(123456))
+pchained (s1_i, noimputed include(sum(s4_i)) scale) ///
+		 (s4_i, noimputed include(mean(s1_i)) scale), ///
+		 i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mio(add(1) chaindots  by(group) rseed(123456) dryrun)
 
 
-*************************
-***  Sampling Weight  ***
+		 
+********************************************************************************
+*** Weighted imputation ***
 
 simdata 1000 3
-pchained s1_i s4_i [pw=weight], i(id) t(time) comcov(x1 i.x2 x3 y1) score(sum) mio(add(1) chaindots rseed(123456))
+pchained (s1_i, noimputed include(sum(s4_i)) scale) ///
+		 (s4_i, noimputed include(mean(s1_i)) scale) ///
+		 [pw=weight], i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
 
 
-****************************************************************
+
+********************************************************************************
 ***  Imputing non-scale variables together with scale items  ***
 
-*** 
+***
 simdata 500 3
-pchained s1_i (y2, noimputed) (y3 i.yx x1 i.yz, include(y2 mean(s1_i))), ///
-	          i(id) t(time) comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456)) ///
-			  mod(s1_i = "pmm, knn(3)" y2 = "regress" y3 = "regress")
-
-
-*** 		  
+pchained (s1_i, noimputed scale) ///
+		 (y2, noimputed omit(x* y*)) ///
+		 (y3 i.yx i.yz, include(y2 mean(s1_i))), ///
+	     i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mod(s1_i = "pmm, knn(3)" y2 = "regress" y3 = "regress") ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
+		 
+*** 		 
 simdata 500 3
-pchained s1_i (y2, include(y3 mean(s1_i)) omit(x1 i.x2)) (y3 i.yx x1 i.yz, include(y2 mean(s1_i))), ///
-	          i(id) t(time) comcov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
-			  mod(y2 = "pmm, knn(3)" y3 = "regress")
+pchained (s1_i, noimputed include(y2 y3) scale) ///
+		 (y2, noimputed include(y3 mean(s1_i)) omit(x* y*)) ///
+		 (y3 i.yx i.yz, include(y2 sum(s1_i))), ///
+	     i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mod(s1_i = "pmm, knn(3)" y2 = "regress" y3 = "regress") ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
 
+		 
 
-simdata 500 3
-pchained s1_i s2_i (y2, include(y3 mean(s1_i) sum(s2_i)) omit(x1 i.x2 y1)) (y3 i.yx x1 i.yz, include(y2 mean(s2_i))), ///
-	          i(id) t(time) comcov(x1 i.x2 x3 y1) addsad(y2 y3) mio(add(1) chaindots rseed(123456)) ///
-			  mod(y2 = "pmm, knn(3)" y3 = "regress")
-
-			  
-
-*******************************************
+********************************************************************************
 ***  Imputing non-scale variables only  ***
 
 simdata 500 3
 pchained (y2, include(y3)) ///
 		 (y3 i.yx x1 i.yz, include(y2)), ///
-		 comcov(x1 i.x2 x3 y1) ///
-	     i(id) t(time) mio(add(1) chaindots rseed(123456)) ///
-		 mod(y2 = "pmm, knn(3)" y3 = "regress")
-
-
+		 i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mod(y2 = "pmm, knn(3)" y3 = "regress") ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
 
 		 
-******************************************
+		 
+********************************************************************************
 ***  Imputation subject to conditions  ***	 
-		 
+
 simdata 500 3
 
 bys id: gen x5_base = x5[1]
 
-*************
+*>>>>>>>>>>>>>>>>>>>>>>>>>
 *** >>>>>>> Ensuring the nesting condition holds
+
 *** The following is IMPORTANT as otherwise Stata will throw an error
 *** For details see README and the Stata Manual
 
@@ -151,30 +200,37 @@ replace y5 = -9999999 if y4 < 0  // assign a large number that can be replaces w
 replace y6 = -9999999 if x5 < 0  // assign a large number that can be replaces with missing after imputation
  
 *** >>>>>>>
-*************
-	
-pchained s1_i s2_i s5_i s6_i ///
-			  (y2 x5*, noimputed)  ///
-			  (y4 i.yx i.yz x5, include(y2 mean(s1_i))) ///
-			  (y5 i.yx x1 i.yz x5 i.x2, include(y*)) ///
-			  (y6, noimputed omit(x*)), ///
-	          i(id) t(time) comcov(x1 i.x2 x3 y1 x5*) mio(add(1) chaindots rseed(123456)) ///
-			  mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)" ///
-				  y2 = "regress" y4 = "pmm, knn(3)" y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
-			  condc(s5_i = "if x5_base > -1" y6 = "if x5 >= 0") ///
-			  condi(s6_i = "if mean(s1_i) > 0" y5 = "if y4 > -1")
-			  
+*>>>>>>>>>>>>>>>>>>>>>>>>>
+
+pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) /// 
+		 (s2_i, include(mean(s1_i) sum(s5_i s6_i)) scale omit(x5_base)) ///
+		 (s5_i, include(mean(s1_i s2_i s6_i)) scale) ///
+		 (s6_i, include(s1_i mean(s2_i s5_i)) scale omit(x5_base)) ///
+		 (y2 i.yz, noimputed omit(x* y*))  ///
+		 (y4 i.yx i.yz x5, include(y2 mean(s1_i)) omit(x5_base)) ///
+		 (y5 i.yx x1 i.yz x5 i.x2, include(y*) omit(x5_base)) ///
+		 (y6, noimputed omit(x* y*)), ///
+	     i(id) t(time) ///
+		 common(x1 i.x2 x3 y1 x5*) ///
+		 mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)" ///
+		 	 y2 = "regress" y4 = "pmm, knn(3)" y5 = "pmm, knn(3)" y6 = "pmm, knn(3)") ///
+		 condc(s5_i = "if x5_base > -1" y6 = "if x5 >= 0") ///
+		 condi(s6_i = "if mean(s1_i) > 0" y5 = "if y4 > -1") ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
 	  
 
 
 ********************************************************************************
-***  Imputing on complete remaining scales (Plumpton bypass)                 ***
+***  Imputing on complete remaining scales (Plumpton bypass) ***
 
 ***		
 simdata 500 3
-pchained s1_i s3_i, i(id) t(time) full comcov(x1 i.x2 x3 y1) mio(add(1) chaindots rseed(123456))
+pchained (s1_i, noimputed include(s3_i) scale) ///
+		 (s3_i, noimputed include(s1_i) scale), ///
+		 i(id) t(time) ///
+		 common(x1 i.x2 x3 y1) ///
+		 mio(add(1) chaindots rseed(123456) dryrun)
 
-	  
 	  
 *** Generate aggregates off of imputed vars
 *mi xeq: egen s1_sum = rowtotal(s1*)

@@ -67,6 +67,11 @@ pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) ///
   
 exit
 
+/*
+TODO:
+      fix user information displays -- order thematically
+	  update readme
+*/
 
 pchained (s1_i x1, include(y3 sum(s2_i)) omit(y1) scale) ///
 		 (s2_i x4 y1, include(y2 mean(s1_i)) omit(y1) scale cont) ///

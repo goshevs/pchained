@@ -128,7 +128,9 @@ program define pchained, eclass
 		
 		*** Covariate collection
 		*** Collect all covariates and check for duplication and miss-specification
-		fvunab commonCov: `commoncov' 
+		if "`commoncov'" ~= "" {
+			fvunab commonCov: `commoncov' 
+		}
 		local allCovs "`commonCov' `miModelCovs'"
 		local allCovs: list uniq allCovs
 		
@@ -183,7 +185,12 @@ program define pchained, eclass
 		local miSadvRS ""
 		foreach var of local miSadv {
 			local miSadvRS "`miSadvRS' `var'_`timevar'"
-			ren `var' `var'_`timevar'
+			capture ren `var' `var'_`timevar'
+				if _rc {
+					noi di in r "Variable `var' cannot be processed. " _n ///
+					"If `var' is a scale, please include option 'scale' in its equation"
+					exit 111
+				}
 		}
 				
 		noi di _n "********************************************************" _n ///
