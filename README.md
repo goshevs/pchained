@@ -9,10 +9,10 @@ Stata command `pchained`
 Introduction
 ---
 
-This is a new Stata command which is wraps around `mi impute chained` and 
-offers simplified syntax for imputation in longitudinal data. It also offers 
-functionality for conducting scale imputation at the item level,
-including Plumpton-type chained imputation of scales (Plumpton, 2016).
+This is a new Stata command which wraps around `mi impute chained` and 
+offers simplified syntax for imputing missing values in longitudinal data. 
+It also provides functionality for conducting scale imputation at the item level,
+including Plumpton-style chained imputation of scales (Plumpton, 2016).
 
 
 Installation
@@ -32,17 +32,17 @@ What's new?
 
 The most recent release, `pchained` v.1.0, unifies model definition for
 imputed variables, scales or stand-alone dependent variables, and simplifies 
-syntax while providing a much greater degree of flexiblity in model specification.
+syntax while providing a much greater degree of flexibility in model specification.
  
-The most recent version is **not backward compatable** and therefore old code
+This version of `pchained` is **not backward compatible** and therefore old code
 has to be updated to the new syntax to ensure proper operation.
 
 **Added functionality**
 
-The following new functionality was added to `pchained` in this version:
+The following new features have been added to `pchained`:
 
 - Imputation subject to conditions. See options `CONDImputed` and `CONDComplete`
-- Imputation on a full set of scale items rather than on functions of scale items. 
+- Imputation on a full set of scale items in addition to imputation on functions of scale items. 
 See examples below for an illustration.
 - Wildcards (i.e. `*`) can now be used in variable lists
 
@@ -77,7 +77,7 @@ syntax miModel [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) ///
 
 | argument       | description            |
 |----------------|------------------------|
-| *COMMONcov*    | covariates to be included in the scale item and stand-alone variable imputatation models, supports factor variable syntax and wild cards|
+| *COMMONcov*    | covariates to be included in the scale item and stand-alone variable imputation models, supports factor variable syntax and wild cards|
 | *MODel*        | model and options to be passed on to `mi impute chained` for every imputed scale and stand-alone variable; this is a conditionally required argument; see below for details |
 | *CONDImputed*  | conditional imputation; corresponds to `cond()` in `mi impute chained`; see below for syntax |
 | *CONDComplete* | imputation conditional on the values of a exogenous and complete regressor (specified in `COMMONcov`); see below for syntax |
