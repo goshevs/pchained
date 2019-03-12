@@ -165,7 +165,7 @@ The option has the following syntax:
 `condc(scale_stub or depvar = "if condition" [scale_stub or depvar = "if condition"]...)` 
 
 where `condition` is either a standard Stata condition or a condition which involves `means` or `sums` of scales. 
-Multiple conditions for multiple scales/stand-alone varibles can be specified. See section Examples for illutrations.
+Multiple conditions for multiple scales/stand-alone variables can be specified. See section Examples for illustrations.
 
 To request conditional imputation, the user has to specify option `CONDImputed`. The option has the same syntax as 
 `CONDComplete` but the variables that are being conditioned on must be imputed variables.
@@ -173,7 +173,7 @@ To request conditional imputation, the user has to specify option `CONDImputed`.
 An important requirement for imputation subject to conditions is to ensure "that missing 
 values of all conditioning variables [are] nested within missing values 
 of the conditional variable" (Stata Multiple-Imputation Reference Manual Release 15, p. 161).
-This requirement, which we will refer to as "the nesting condition" may be unclear to novice 
+This requirement, which we refer to as "the nesting condition" may be unclear to novice 
 users and therefore we have provided a use case in the Examples section. Also, the user has to 
 tell Stata the value which is being used to label non-applicable observations 
 (i.e. observations that fall outside of the condition); this is done using 
@@ -381,7 +381,7 @@ foreach var of varlist s6_i* {
 
 drop mymiss mymean
 
-// assign a large number that can be replaces with missing after imputation
+// assign a large number that can be replaced with missing after imputation
 replace y5 = -9999999 if y4 < 0
 replace y6 = -9999999 if x5 < 0
  
