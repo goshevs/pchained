@@ -1044,63 +1044,6 @@ program define _meanSumInclude, sclass
 end
 
 
-*** Slice conditions
-capture program drop _parseCondition
-program define _parseCondition, sclass
-
-	args myinput type
-	
-	local nlistex "[a-zA-Z(-0-9)_\(\)<>~=\.\&\| ]+"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
-	local myvars "([a-zA-Z0-9_\(\) ]+)([<>~=]+)([a-zA-Z(-0-9)_\(\) ]+)(\|?\&?)" // [a-zA-Z0-9_]\|\&\.\(\)]+"
-	
-	*noi di `"`myinput'"'
-	*noi di "TEST 0"
-	
-	while regexm(`"`myinput'"', `"`strregex'"') {
-		local scale `=regexs(0)'
-		*noi di "TEST 1"
-		*noi di `"`scale'"'
-		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
-		gettoken sname cond: scale, parse("=")
-		gettoken left cond: cond, parse("=")
-		local cond = trim(`"`cond'"')
-		local cond = subinstr(`"`cond'"', `"""',"",.)
-		local cond = subinstr(`"`cond'"', `"'"',"",.)
-		local sname = trim("`sname'")
-		
-		*noi di "`sname'"
-		
-		*** parsing the if condition
-		local ifL "" // left side
-		local ifS "" // signs
-		local ifR "" // right side
-		local ifB "" // between
-		*noi di "`cond'"
-		
-		local mycond = regexr(`"`cond'"', "^[ ]*if[ ]+", "")
-		while regexm(`"`mycond'"', `"`myvars'"') {
-			local ifL "`ifL' `=regexs(1)'"
-			local ifR "`ifR' `=regexs(3)'"
-			local ifS "`ifS' `=regexs(2)'"
-			local ifB "`ifB' `=regexs(4)'"
-			local mycond = subinstr(`"`mycond'"', "`=regexs(0)'", "",.)
-			
-		}
-		
-		* noi di "`cond'"
-		* noi di "`ifB'"
-		
-		*** Post result
-		sreturn local cond`type'_`sname' `cond'
-		sreturn local ifL`type'_`sname' `=itrim("`ifL'")'
-		sreturn local ifR`type'_`sname' `=itrim("`ifR'")'
-		sreturn local ifS`type'_`sname' `"`=trim("`ifS'")'"'
-		sreturn local ifB`type'_`sname' `"`=trim("`ifB'")'"'
-	}
-end
-
-
 **** Rebuild conditions
 capture program drop _buildCondition
 program define _buildCondition, sclass
@@ -1158,7 +1101,7 @@ program define _imputationS2Cond, sclass
 
 	args condimputed scale depvar timevar miDepVarsOriginal cov_invar cov_var type
 	
-	noi _parseCondition `"`condimputed'"' "`type'"
+	noi _parseConditions `"`condimputed'"' "`type'"
 	*noi sreturn list
 	if regexm("`depvar'", "(.+)_`timevar'([0-9]+)$") {
 		local depvar "`=regexs(1)'"
