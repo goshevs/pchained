@@ -195,7 +195,6 @@ Examples
 ---
 
 ```
-
 ********************************************************************************
 ***  One scale  ***
 
@@ -331,7 +330,7 @@ pchained (s1_i, noimputed scale) ///
 *** 		 
 simdata 500 3
 pchained (s1_i, noimputed include(y2 y3) scale) ///
-		 (y2, noimputed include(y3 mean(s1_i)) omit(x* y*)) ///
+		 (y2, noimputed include(y* mean(s1_i)) omit(x* y*)) ///
 		 (y3 i.yx i.yz, include(y2 sum(s1_i))), ///
 	     i(id) t(time) ///
 		 common(x1 i.x2 x3 y1) ///
@@ -383,8 +382,8 @@ foreach var of varlist s6_i* {
 drop mymiss mymean
 
 // assign a large number that can be replaces with missing after imputation
-replace y5 = -9999999 if y4 < 0  
-replace y6 = -9999999 if x5 < 0 
+replace y5 = -9999999 if y4 < 0
+replace y6 = -9999999 if x5 < 0
  
 *** >>>>>>>
 *>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -393,7 +392,7 @@ replace y6 = -9999999 if x5 < 0
 pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) 
 		 (s2_i, include(mean(s1_i) sum(s5_i s6_i)) scale omit(x5_base))
 		 (s5_i, include(mean(s1_i s2_i s6_i)) scale)
-		 (s6_i, include(s1_i mean(s2_i s5_i)) scale omit(x5_base))
+		 (s6_i, include(y* s1_i mean(s2_i s5_i)) scale omit(x5_base))
 		 (y2 i.yz, noimputed omit(x* y*))
 		 (y4 i.yx i.yz x5, include(y2 mean(s1_i)) omit(x5_base))
 		 (y5 i.yx x1 i.yz x5 i.x2, include(y*) omit(x5_base))
