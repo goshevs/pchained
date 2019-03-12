@@ -9,9 +9,9 @@ Stata command `pchained`
 Introduction
 ---
 
-This is a new Stata command which is a wrapper around `mi impute chained` and 
+This is a new Stata command which is wraps around `mi impute chained` and 
 offers simplified syntax for imputation in longitudinal data. It also offers 
-functinality for conducting scale imputation at the item level,
+functionality for conducting scale imputation at the item level,
 including Plumpton-type chained imputation of scales (Plumpton, 2016).
 
 
@@ -30,7 +30,7 @@ What's new?
 
 **Critical changes**
 
-The most recent release, `pchained` v1.0, unifies model definition for
+The most recent release, `pchained` v.1.0, unifies model definition for
 imputed variables, scales or stand-alone dependent variables, and simplifies 
 syntax while providing a much greater degree of flexiblity in model specification.
  
@@ -52,12 +52,12 @@ Syntax
 
 ```
 syntax miModel [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
-							[COMMONcov(string asis) MODel(string asis)  ///
-							CONDImputed(string asis) CONDComplete(string asis)  ///
-							CATCutoff(integer 10)  MINCsize(integer 0) ///
-							NAcode(integer -9999999) ///
-							MIOptions(string asis) MERGOptions(string asis) ///
-							SAVEmidata(string) PRINTmodel suspend debug] 
+						[COMMONcov(string asis) MODel(string asis)  ///
+						CONDImputed(string asis) CONDComplete(string asis)  ///
+						CATCutoff(integer 10)  MINCsize(integer 0) ///
+						NAcode(integer -9999999) ///
+						MIOptions(string asis) MERGOptions(string asis) ///
+						SAVEmidata(string) PRINTmodel suspend debug] 
 ```
 <br>
 
@@ -67,9 +67,9 @@ syntax miModel [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) ///
 
 | argument    | description            |
 |-------------|------------------------|
-| *miModel*   | models for scales or stand-alone variables to be imputed; see below for specific syntax |
+| *miModel*   | models for scales and/or stand-alone variables to be imputed; see below for specific syntax |
 | *Ivar*      | unique cluster/panel identifier (i.e. person, firm, country id) |
-| *Timevar*   | time/wave identifier |
+| *Timevar*   | time/wave/period identifier |
 
 <br>
 
@@ -85,7 +85,7 @@ syntax miModel [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) ///
 |                | default: `10` |
 | *MINCsize*     | minimum cell size required for item to be included in analysis; if lower --> classified as rare |
 |                | default: `0` |
-| *NAcode*       | specifies the code used to label not applicable observations (applies to imputation subject to conditions) |
+| *NAcode*       | specifies the code used to label non-applicable observations (applies to imputation subject to conditions) |
 | *MIOptions*    | `mi impute chained` options to be passed on (`by()` is also allowed) |
 | *MERGOptions*  | merge options to be passed on to `merge` upon merging the imputed data with the original data; imputed dataset is *master*, original dataset is *using* |
 |                | default: `keep(match)` |
@@ -117,8 +117,8 @@ Multiple models could be specified using the following syntax:
 
 The arguments that `miModel` takes are:
 
-- `dv`: an item scale or a stand-alone dependent variable to be imputed
-- `covariateList`: an optional list of covariates to be included in the imputation equation of `dv`. 
+- `dv`: a scale or a stand-alone dependent variable to be imputed
+- `covariateList`: an optional list of covariates to be included in the imputation equation for `dv`. 
 - `options`: could be any set of:
 	- `scale`: has to be included if `dv` is a scale
 	- `cont` or `continuous`: if `dv` is scale, this options allows the user to request items to be
@@ -128,7 +128,7 @@ The arguments that `miModel` takes are:
 	the user to specify other stand-alone variables, `other_sadv`, other scales, `other_scales` as well as 
 	mean and sum scores of other scales being imputed as predictors in the 
 	imputation model for `dv`; if `include` is specified, option `noimputed` is assumed.
-	If `other_sadv` or `other_scales` are specified, all periods of the stand-alone variables in `other_sadv` 
+	If `other_sadv` or `other_scales` are specified, all time periods of the stand-alone variables in `other_sadv` 
 	or the items of the scales in `other_scales` are used as predictors in the imputation equation.
 	If a `mean` or `sum` score is requested, the score for the time period corresponding to 
 	the time period of `dv` is included as a regressor.
