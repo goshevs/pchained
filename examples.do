@@ -20,7 +20,6 @@ simdata 200 3
 pchained (s1_i, noimputed scale), ///
 		  i(id) t(time) ///
 		  mio(add(1) chaindots rseed(123456) dryrun)
-exit
 
 *** Categorical items plus covariates
 simdata 200 3
@@ -160,6 +159,7 @@ pchained (s1_i, noimputed include(y2 y3) scale) ///
 ********************************************************************************
 ***  Imputing non-scale variables only  ***
 
+***
 simdata 500 3
 pchained (y2, include(y3)) ///
 		 (y3 i.yx x1 i.yz, include(y2)), ///
@@ -173,11 +173,12 @@ pchained (y2, include(y3)) ///
 ********************************************************************************
 ***  Imputation subject to conditions  ***	 
 
+***
 simdata 500 3
 
 bys id: gen x5_base = x5[1]
 
-*>>>>>>>>>>>>>>>>>>>>>>>>>
+*>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 *** >>>>>>> Ensuring the nesting condition holds
 
 *** The following is IMPORTANT as otherwise Stata will throw an error
@@ -197,11 +198,12 @@ foreach var of varlist s6_i* {
 
 drop mymiss mymean
 
-replace y5 = -9999999 if y4 < 0  // assign a large number that can be replaces with missing after imputation
-replace y6 = -9999999 if x5 < 0  // assign a large number that can be replaces with missing after imputation
+// assign a large number that can be replaces with missing after imputation
+replace y5 = -9999999 if y4 < 0
+replace y6 = -9999999 if x5 < 0
  
 *** >>>>>>>
-*>>>>>>>>>>>>>>>>>>>>>>>>>
+*>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 #d ;
 pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) 
@@ -225,7 +227,7 @@ pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*))
 
 
 ********************************************************************************
-***  Imputing on complete remaining scales (Plumpton bypass) ***
+***  Imputing on complete scales (Plumpton bypass) ***
 
 ***		
 simdata 500 3
