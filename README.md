@@ -117,7 +117,7 @@ Multiple models could be specified using the following syntax:
 
 The arguments that `miModel` takes are:
 
-- `dv`: a scale or a stand-alone dependent variable to be imputed
+- `dv`: a scale stub or a stand-alone dependent variable to be imputed
 - `covariateList`: an optional list of covariates to be included in the imputation equation for `dv`. 
 - `options`: could be any set of:
 	- `scale`: has to be included if `dv` is a scale
@@ -139,17 +139,32 @@ The arguments that `miModel` takes are:
 	variables specified in `include` and `COMMONcov`.
 	- other options specific to the imputation model
 
-Option `MODel` is required for all stand-alone dependent variables and is optional for scales. 
-If the user provides an entry for a scale, their input overrides the internal method in `pchained`.
+<br>
 
-The internal method corresponds to the `dv` type (but it is **not** necessarily 
-appropriate in every use case):
+**Syntax for `MODel`**
+
+Option `MODel` is required for all stand-alone dependent variables and is optional for scales. 
+If the user provides an entry for a scale, their input overrides the built-in method in `pchained`.
+
+`MODel' has the following form:
+
+`mod(scale_stub or sadv = "method[, options]" [scale_stub or sadv = "method[, options]"]...)` 
+
+where `method` is a univariate method as outlined in the help file of `mi impute chained`. 
+
+<br>
+
+**Built-in methods in `pchained`**
+
+The built-in methods correspond to `dv` types: 
 
 | `dv` type      | method    |
 |----------------|-----------|
 | continuous     | `regress` |
 | binary         | `logit`   |
 | multi-category | `ologit`  |
+
+Users should **not** rely on `pchained` to determine the approproate method for their analysis.
 
 
 <br>
@@ -162,7 +177,7 @@ Conditioning on scale scores, means and sums, is also supported.
 To condition on complete regressors, the user needs to specify option `CONDComplete`. 
 The option has the following syntax:
 
-`condc(scale_stub or depvar = "if condition" [scale_stub or depvar = "if condition"]...)` 
+`condc(scale_stub or sadv = "if condition" [scale_stub or depvar = "if condition"]...)` 
 
 where `condition` is either a standard Stata condition or a condition which involves `means` or `sums` of scales. 
 Multiple conditions for multiple scales/stand-alone variables can be specified. See section Examples for illustrations.
