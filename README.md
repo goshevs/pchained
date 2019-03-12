@@ -146,7 +146,7 @@ The arguments that `miModel` takes are:
 Option `MODel` is required for all stand-alone dependent variables and is optional for scales. 
 If the user provides an entry for a scale, their input overrides the built-in method in `pchained`.
 
-`MODel' has the following form:
+`MODel` has the following form:
 
 `mod(scale_stub or sadv = "method[, options]" [scale_stub or sadv = "method[, options]"]...)` 
 
@@ -164,7 +164,7 @@ The built-in methods correspond to `dv` types:
 | binary         | `logit`   |
 | multi-category | `ologit`  |
 
-Users should **not** rely on `pchained` to determine the approproate method for their analysis.
+Users should **not** rely on `pchained` to determine the approproate method for their use case.
 
 
 <br>
@@ -216,34 +216,34 @@ Examples
 *** Categorical items, no covariates
 simdata 200 3
 pchained (s1_i, noimputed scale), ///
-		  i(id) t(time) ///
-		  mio(add(1) chaindots rseed(123456) dryrun)
+          i(id) t(time) ///
+          mio(add(1) chaindots rseed(123456) dryrun)
 
 *** Categorical items plus covariates
 simdata 200 3
 pchained (s1_i, noimputed scale), ///
-		  i(id) t(time) ///
+          i(id) t(time) ///
 		  common(x1 i.x2 x3 y1) ///
 		  mio(add(1) chaindots rseed(123456) dryrun)
 
 *** Categorical items as continuous
 simdata 200 3
 pchained (s1_i, noimputed scale cont), ///
-		  i(id) t(time) ///
+          i(id) t(time) ///
 		  common(x1 i.x2 x3 y1) ///
 		  mio(add(1) chaindots rseed(123456) dryrun)
 
 *** Items continuous by design
 simdata 200 3
 pchained (s4_i, noimputed scale), ///
-		  i(id) t(time) ///
+          i(id) t(time) ///
 		  common(x1 i.x2 x3 y1) ///
 		  mio(add(1) chaindots rseed(123456) dryrun) 
 
 *** Items continuous by design (imputation model defined by user)
 simdata 200 3
 pchained (s4_i, noimputed scale), ///
-		  i(id) t(time) ///
+          i(id) t(time) ///
 		  common(x1 i.x2 x3 y1) ///
 		  mod(s4_i = "pmm, knn(3)") ///
 		  mio(add(1) chaindots rseed(123456) dryrun) 
