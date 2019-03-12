@@ -409,7 +409,7 @@ pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*))
          (s5_i, include(mean(s1_i s2_i s6_i)) scale)
          (s6_i, include(y* s1_i mean(s2_i s5_i)) scale omit(x5_base))
          (y2 i.yz, noimputed omit(x* y*))
-		 (y4 i.yx i.yz x5, include(y2 mean(s1_i)) omit(x5_base))
+         (y4 i.yx i.yz x5, include(y2 mean(s1_i)) omit(x5_base))
          (y5 i.yx x1 i.yz x5 i.x2, include(y*) omit(x5_base))
          (y6, noimputed omit(x* y*)),
           i(id) t(time)
