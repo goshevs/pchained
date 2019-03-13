@@ -351,7 +351,7 @@ program define pchained, eclass
 					local miOmitListPlain "`miOmitListPlain' `fullList'"
 				}
 			}
-
+			
 			*** Restrict the list of omitted vars to vars in the common covariates list
 			local miOmitList ""
 			foreach comCovar of local miComCovList {
@@ -362,6 +362,10 @@ program define pchained, eclass
 				}
 			}	
 
+			*** Exclude model covariates from miOmitList
+			local commonList: list miCovList & miOmitList
+			local miOmitList: list miOmitList - commonList
+			
 			* noi di "`miOmitVars'"   // omitted variables as enter into the syntax
 			* noi di "`miOmitList'"   // omitted variables as enter the model
 			
@@ -1161,18 +1165,21 @@ program define _createAllPeriods, sclass
 	local outList ""
 	if "`inList'" ~= "" {
 		foreach var of local inList {
-			fvunab placeholder: `var'*	
-			local outList "`outList' `placeholder'"
-			
-			/*
-			*** Include only variables that have the `var' part or `var'_timevar part
-			foreach myVar of local placeholder {
-				if regexm("`myVar'", "`var'(_`timevar'[0-9]+)?$") {
-					noi di "`myVar'"
-					local outList "`outList' `myVar'"
+			local wCard = strpos("`var'", "*")
+			if `wCard' ~= 0 {  // if there is a wildcard
+				local preFix = substr("`var'", 1, `=`wCard' -1') // get the prefix
+				fvunab placeholder: `preFix'*	
+				local outList "`outList' `placeholder'"
+			}
+			else {
+				*** Include only variables that have the `var' part or `var'_timevar part
+				fvunab placeholder: `var'*	
+				foreach myVar of local placeholder {
+					if regexm("`myVar'", "`var'(_`timevar'[0-9]+)?$") {
+						local outList "`outList' `myVar'"
+					}
 				}
 			}
-			*/
 		}	
 	}
 	
