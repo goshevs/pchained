@@ -55,7 +55,7 @@ program define simdata
 		bys id: replace x4 = cond(x4[1] < 0, 0, x4[1])
 		bys id: replace x4 = cond(runiform() > 0.3, x4[_n -1] + 1, x4[_n-1]) if _n > 1 
 		bys id: gen x5 = rnormal()
-		
+		bys id: gen x6 = rnormal()
 		
 		** Generate ovars and covars
 		bys id: gen y2 = abs(rnormal())
@@ -63,7 +63,9 @@ program define simdata
 		bys id: gen y4 = round(rnormal())
 		bys id: gen y5 = cond(y4 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
 		bys id: gen y6 = cond(x5 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
-		
+			
+		bys id: gen ys1 = cond(x6 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
+		bys id: gen ys2 = cond(x6 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
 		
 		bys id: gen yx = round(runiform())
 		bys id: gen yz = round(0 + 3 * runiform())
@@ -113,9 +115,7 @@ program define simdata
 		
 		drop ih mydraw mymean
 
-		sum
-
-
+		
 		********************************************************************************
 		*** Introduce missingness
 		********************************************************************************
@@ -152,6 +152,9 @@ program define simdata
 		
 		label var y5 "recorded if y4 >=0"
 		label var y6 "recorded if x5 >=0"
+		label var ys1 "recorded if x6 >=0"
+		label var ys2 "recorded if x6 >=0"
+		
 		foreach var of varlist s5_* {
 			label var `var' "recorded if x5_time1 >= 0"
 		}
