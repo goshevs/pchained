@@ -1,4 +1,4 @@
-* Plumpton with -mi impute chained-
+* Program -pchained- and utility functions
 * Authors: Simo Goshev, Zitong Liu
 * Version: 1.0
 *
@@ -11,7 +11,7 @@
 *** Ivar         = cluster identifier (i.e. person, firm, country id)
 *** Timevar      = time/wave identifier
 *** MODel        = user controls the imputation model used for scales and sadv
-*** COMMONcov    = list of commn covariates in scale and sadv models, supports factor variable syntax and wildcards 
+*** COMMONcov    = list of commn covariates in scale and sadv models, supports factor variable syntax and wild cards 
 *** CONDImputed  = conditional imputation as per Stata's manual (endogenous vars) 
 *** CONDComplete = imputation subject to conditioning on a exogenous/complete covariate
 *** CATCutoff    = max number of categories/levels to classify as categorical; if fails --> classified as continuous
@@ -112,22 +112,26 @@ program define pchained, eclass
 				}
 			}
 			else {
+				_wildCardExpand "`s(depv)'"   // expand the sadv list if wild cards are present
+				local sadvList "`=stritrim(strtrim("`sadvList' `s(sadvList)'"))'"
 				local miSadv "`=trim("`miSadv' `s(depv)'")'"
 			}
 			
 			local miModelCovs "`=trim(stritrim("`miModelCovs' `s(covs)'"))'"
 			local ++i
 		}
-		
+		 
 		*** Combine outcomes
 		local allOutcomes "`miScale' `miSadv'"
 		
 		*** Model inputs are identified
-		* noi di "All outcomes: `allOutcomes'"
-		* noi di "Scales: `miScale'"
-		* noi di "Continuous scales: `isContScale'"	
-		* noi di "SADvariables: `miSadv'"
-		* noi di "Model covariates: `miModelCovs'"	
+		noi di "All outcomes: `allOutcomes'"
+		noi di "Scales: `miScale'"
+		noi di "Continuous scales: `isContScale'"	
+		noi di "SAD variables: `miSadv'"
+		noi di "SAD variables expanded: `sadvList'"
+		noi di "Model covariates: `miModelCovs'"	
+		
 		
 		*** Covariate collection
 		*** Collect all covariates and check for duplication and miss-specification
@@ -182,6 +186,12 @@ program define pchained, eclass
 		}
 		
 		*** >>> SADV	
+		
+		******* >>>> TESTING!!!
+		*** SADV override
+		local miSadv "`sadvList'"
+		
+		******* >>>>
 		
 		*** Collecting and renaming sadv's for reshape
 		local miSadvRS ""
@@ -249,11 +259,11 @@ program define pchained, eclass
 		*** <><><> Checking validity of inputs for imputation subject to conditions 
 		
 		*** Checking condimputed() for invalid inputs 
-		_isInModel `"`condimputed'"' "cImp" "`miScale'" "`miSadv'"
+		noi _isInModel `"`condimputed'"' "cImp" "`miScale'" "`miSadv'" "" "`allOutcomes'"
 		
 		*** Checking condcomplete() for invalid inputs
 		sreturn clear
-		_isInModel `"`condcomplete'"' "" "`miScale'" "`miSadv'" "`plainCovs'"
+		noi _isInModel `"`condcomplete'"' "" "`miScale'" "`miSadv'" "`plainCovs'" "`allOutcomes'"
 
 			
 		
@@ -287,9 +297,9 @@ program define pchained, eclass
 		*** Creating the list of common covariates
 		
 		local miComCovList ""
-		_createAllPeriods "`commoncov'" "`timevar'"
+		noi _createAllPeriods "`commoncov'" "`timevar'"
 		local miComCovList "`s(expandedList)'"
-		
+				
 		* noi di "`commoncov'"      // common covariates as enter into the syntax
 		* noi di "`miComCovList'"   // common covariates as enter the model
 		
@@ -300,7 +310,7 @@ program define pchained, eclass
 		local depVarCompleteList ""
 		
 		_parseAnything "`anything'"
-		
+	
 		local iterModels = 1
 		while `"`s(model`iterModels')'"' ~= "" {
 
@@ -319,11 +329,19 @@ program define pchained, eclass
 			
 			local depVarMod "`s(depv)'"
 			
+			*** Remove wildcard if present
+			local depVarModOrig ""
+			local wCard = strpos("`depVarMod'", "*")
+			if `wCard' ~= 0 {
+				local depVarModOrig "`depVarMod'"   // for use in _imputationS2Cond
+				local depVarMod = substr("`depVarMod'", 1, `=`wCard' -1')
+			}
+						
 			*** --- Retrieve MODEL if in MODel option
 			
-			_parseMODel `"`model'"' "_model"
+			_parseMODel `"`model'"' "_model"   //ys
 			local userModel `"`s(`depVarMod'_model)'"'
-
+			
 			* noi di "`miDepVar'"
 			* noi di "`miIncVars'"
 			
@@ -334,7 +352,7 @@ program define pchained, eclass
 			local miCovList "`s(expandedList)'"
 			
 			* noi di "`miCovVar'"    // covariates as enter into the syntax
-			* noi di "`miCovList'"   // covariates as enter the model
+			* noi di "COVARIATE LIST: `miCovList'"   // covariates as enter the model
 			
 			*** --- Collect OMITTED variables
 			
@@ -351,7 +369,7 @@ program define pchained, eclass
 					local miOmitListPlain "`miOmitListPlain' `fullList'"
 				}
 			}
-			
+
 			*** Restrict the list of omitted vars to vars in the common covariates list
 			local miOmitList ""
 			foreach comCovar of local miComCovList {
@@ -361,13 +379,18 @@ program define pchained, eclass
 					local miOmitList "`miOmitList' `comCovar'"
 				}
 			}	
-
 			*** Exclude model covariates from miOmitList
 			local commonList: list miCovList & miOmitList
 			local miOmitList: list miOmitList - commonList
 			
+			* noi di "`depVarMod'"
+			* noi di "Covars in model: `miCovVar'"
+			* noi di "Covariate list: `miCovList'"
+			* noi di "Common list: `commonList'"
+			* noi di "Omit list: `miOmitList'"
+			
 			* noi di "`miOmitVars'"   // omitted variables as enter into the syntax
-			* noi di "`miOmitList'"   // omitted variables as enter the model
+			* noi di "OMIT LIST: `miOmitList'"   // omitted variables as enter the model
 			
 	
 			
@@ -410,24 +433,37 @@ program define pchained, eclass
 				 
 				*** +++ Incorporate imputation subject to conditions, if provided
 				*** Conditional imputation
-				_imputationS2Cond `"`condimputed'"' "`scale'" "`dVar'" "`timevar'" "`miSadv'" "`covInvar'"
+				noi _imputationS2Cond `"`condimputed'"' "`scale'" "`dVar'" "`timevar'" "`miSadv'" "`covInvar'" "" "`depVarModOrig'"
 				local condImp "`s(condImp)'"
-				
+
 				*** Imputation subject to an exogenous/complete regressor
-				_imputationS2Cond `"`condcomplete'"' "`scale'" "`dVar'" "`timevar'" "" "`covInvar'" "`covVar'" "Comp"
+				noi _imputationS2Cond `"`condcomplete'"' "`scale'" "`dVar'" "`timevar'" "" "`covInvar'" "`covVar'" "`depVarModOrig'" "Comp"
 				local condComp "`s(condComp)'"
 				
-				* noi di "Conditional imputation: `condImp'"
-				* noi di "Condition: `condComp'"
-
-				
 				*** Collect all but current timepoints of dVar	
-				local dVarRemaining: list dVarList - dVar
 				local dVarComplement ""
-				foreach myVar of local dVarRemaining {
-					local dVarComplement "`dVarComplement' (`myVar')"
+				if "`scale'" ~= "" {  // if var is a scale (we need all remaning items of the scale
+					local dVarRemaining: list dVarList - dVar
+					foreach myVar of local dVarRemaining {
+						local dVarComplement "`dVarComplement' (`myVar')"
+					}
 				}
-	
+				else {  // if var is a sadv (we only need the remaning periods of the sadv)
+					foreach rdVar of local dVarList {
+						*** Obtain the stub of sadv
+						if regexm("`dVar'", "(.+)_`timevar'[0-9]+$") {
+							local dVarStub "`=regexs(1)'"
+						}
+						*** Obtain the stub of rdVar
+						if regexm("`rdVar'", "(.+)_`timevar'[0-9]+$") {
+							local rdVarStub "`=regexs(1)'" 
+						}
+						if "`dVarStub'" == "`rdVarStub'" {
+							local dVarComplement "`dVarComplement' (`rdVar')"
+						}
+					}
+				}
+				
 				*** Create the INCLUDE variable lists
 				if "`miIncVars'" ~= "" {					
 
@@ -470,9 +506,9 @@ program define pchained, eclass
 					local rIncVarListUpdated ""   // list of valid included variables
 					if "`rIncVarList'" ~= "" {
 						foreach rVar of local rIncVarList {
-							*** Check if there is a wildcard in rVar
+							*** Check if there is a wild card in rVar
 							local wCard = strpos("`rVar'", "*")
-							if `wCard' ~= 0 {  // if there is a wildcard
+							if `wCard' ~= 0 {  // if there is a wild card
 								local preFix = substr("`rVar'", 1, `=`wCard' -1') // get the prefix
 								// go through the list of allOutcomes to see which they are
 								foreach out of local allOutcomes {
@@ -481,7 +517,7 @@ program define pchained, eclass
 									}
 								}
 							}
-							else {  // there is no wildcard
+							else {  // there is no wild card
 								local rIncVarListUpdated "`rIncVarListUpdated' `rVar'"
 							}
 						}
@@ -504,7 +540,6 @@ program define pchained, eclass
 				}
 						
 				*** Write out the INCLUDE option as it should enter the model
-							
 				local includeOpt "`miCovList' `meanList' `sumList'"
 				if regexm("`miOpts'", "noimputed") {
 					*** If no imputed variables will be included, add remaining outcomes and dependent vars
@@ -523,8 +558,7 @@ program define pchained, eclass
 				local miOpts = stritrim(strtrim("`miOpts'"))
 				
 				
-				*** Develop MODEL specification and incorporate conditioning
-				
+				*** Develop MODEL specification and incorporate conditioning				
 				if (`"`userModel'"' == "") {   // if model is not provided
 					if ("`scale'" ~= "" ) {    // if scale item
 						if `: list dVar in itemsBin' {    // binary items
@@ -737,10 +771,10 @@ end
 capture program drop _parseConditions
 program define _parseConditions, sclass
 
-	args myinput type
+	args myinput type allOutcomes
 	
 	local nlistex "[a-zA-Z(-0-9)_\(\)<>~=\.\&\| ]+"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
+	local strregex "[a-zA-Z0-9\_\*]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
 	local myvars "([a-zA-Z0-9_\(\) ]+)([<>~=]+)([a-zA-Z(-0-9)_\(\) ]+)(\|?\&?)" // [a-zA-Z0-9_]\|\&\.\(\)]+"
 	
 	*noi di `"`myinput'"'
@@ -748,8 +782,8 @@ program define _parseConditions, sclass
 	
 	while regexm(`"`myinput'"', `"`strregex'"') {
 		local scale `=regexs(0)'
-		*noi di "TEST 1"
-		*noi di `"`scale'"'
+		* noi di "TEST 1"
+		* noi di `"`scale'"'
 		local myinput = trim(subinstr(`"`myinput'"', `"`scale'"', "", .))
 		gettoken sname cond: scale, parse("=")
 		gettoken left cond: cond, parse("=")
@@ -757,8 +791,25 @@ program define _parseConditions, sclass
 		local cond = subinstr(`"`cond'"', `"""',"",.)
 		local cond = subinstr(`"`cond'"', `"'"',"",.)
 		local sname = trim("`sname'")
+
 		
-		*noi di "`sname'"
+		*** Remove wild cards from all string
+		local sname = subinstr("`sname'", "*", "", .)
+		local allOutcomes = subinstr("`allOutcomes'","*","", .)
+		
+		*** Trim sname
+		local sname = trim("`sname'")	
+
+		*** <><><> Check if sname in variables included in the model
+		* noi di "`sname'"
+		* noi di "All outcomes: `allOutcomes'"
+		
+		if "`allOutcomes'" ~= "" {
+			if !`:list sname in allOutcomes' {
+				noi di in r _n "Error in condi() or condc(): `sname' not found in the model."
+				error 489
+			}
+		}
 		
 		*** parsing the if condition
 		local ifL "" // left side
@@ -793,9 +844,10 @@ end
 capture program drop _isInModel
 program define _isInModel, sclass
 
-	args condition type miScale miSadv covars
+	args condition type miScale miSadv covars allOutcomes
 	
-	_parseConditions `"`condition'"'
+	_parseConditions `"`condition'"' "" "`allOutcomes'"
+	
 	foreach side in "L" "R" {
 		foreach element in `:s(macros)' {
 			if regexm("`element'", "^if`side'_.+") {
@@ -842,7 +894,7 @@ program define _parseMODel, sclass
 	args myinput type 
 
 	local nlistex "[a-zA-Z]+[,]?[a-zA-Z0-9\(\)= ]*"
-	local strregex "[a-zA-Z0-9\_]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
+	local strregex "[a-zA-Z0-9\_\*]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
 
 	while regexm(`"`myinput'"', `"`strregex'"') {
 		local scale `=regexs(0)'
@@ -852,6 +904,9 @@ program define _parseMODel, sclass
 		local model_opts = trim(`"`model_opts'"')
 		local model_opts = subinstr(`"`model_opts'"', `"""',"",.)
 		local model_opts = subinstr(`"`model_opts'"', `"'"',"",.)
+		
+		** Drop asterisk from sname
+		local sname = subinstr("`sname'", "*", "", .)
 		local sname = trim("`sname'")
 		* noi di "`sname'"
 		*** Post result
@@ -1103,23 +1158,31 @@ end
 capture program drop _imputationS2Cond
 program define _imputationS2Cond, sclass
 
-	args condimputed scale depvar timevar miDepVarsOriginal cov_invar cov_var type
+	args condimputed scale depvar timevar miDepVarsOriginal cov_invar cov_var depVarModOrig type
 	
-	noi _parseConditions `"`condimputed'"' "`type'"
-	*noi sreturn list
+	_parseConditions `"`condimputed'"' "`type'"
+	
 	if regexm("`depvar'", "(.+)_`timevar'([0-9]+)$") {
-		local depvar "`=regexs(1)'"
-		local tp "`=regexs(2)'"
+		local stub "`=regexs(1)'"    // stub
+		local tp "`=regexs(2)'"        // time period
 	}
-	if "`scale'" ~= "" {   //bypass to accommodate scale vars
-		local depvar "`scale'"
+	if "`scale'" ~= "" {   // bypass to accommodate scale vars
+		local stub "`scale'"
 	}
-
-	if "cond_`depvar'" ~= "" {
-		local condLHS "`s(ifL`type'_`depvar')'"   
-		local condRHS "`s(ifR`type'_`depvar')'"
-		local wSigns "`s(ifS`type'_`depvar')'"
-		local bSigns "`s(ifB`type'_`depvar')'"
+	
+	*** Obtain the list of all depVarModOrig
+	if "`depVarModOrig'" ~= "" {
+		unab asteriskList: `depVarModOrig'
+		if `:list depvar in asteriskList' { // bypass to accomodate vars with wild cards
+			local stub "`=subinstr("`depVarModOrig'", "*", "", .)'"
+		}
+	}
+	
+	if "cond_`stub'" ~= "" {
+		local condLHS "`s(ifL`type'_`stub')'"   
+		local condRHS "`s(ifR`type'_`stub')'"
+		local wSigns "`s(ifS`type'_`stub')'"
+		local bSigns "`s(ifB`type'_`stub')'"
 	}
 
 	*** Rebuilding the conditions
@@ -1257,3 +1320,28 @@ program define _displayAllVars
 		noi di "********************************************************"	
 	}
 end
+
+*** Expand variable names with wild cards
+capture program drop _wildCardExpand
+program define _wildCardExpand, sclass
+
+	args var allCovariates
+	
+	*** Check if there is a wildcard in rVar
+	local wCard = strpos("`var'", "*")
+	if `wCard' ~= 0 {  // if there is a wildcard
+		local preFix = substr("`var'", 1, `=`wCard' -1') // get the prefix
+		unab varList: `preFix'*
+		foreach sadv of local varList {
+			if !`:list sadv in allCovariates' {
+				local sadvList "`sadvList' `sadv'"
+			}
+		}
+	}
+	else {  // there is no wildcard
+		local sadvList "`sadvList' `var'"
+	}
+	sreturn local sadvList "`sadvList'"
+	
+end
+

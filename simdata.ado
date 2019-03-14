@@ -1,6 +1,6 @@
-* Simulating data for pchained --> Plumpton with -mi impute chained-
+* Simulating data for -pchained-
 * Developers: Simo Goshev, Zitong Liu
-* Version: 0.23
+* Version: 0.5
 *
 *
 *

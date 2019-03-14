@@ -9,7 +9,7 @@ Stata command `pchained`
 Introduction
 ---
 
-This is a new Stata command which wraps around `mi impute chained` and 
+This is a new Stata command which wraps `mi impute chained` and 
 offers simplified syntax for imputing missing values in longitudinal data. 
 It also provides functionality for conducting scale imputation at the item level,
 including Plumpton-style chained imputation of scales (Plumpton, 2016).
@@ -43,8 +43,7 @@ The following new features have been added to `pchained`:
 
 - Imputation subject to conditions. See options `CONDImputed` and `CONDComplete`
 - Imputation on a full set of scale items in addition to imputation on functions of scale items. 
-See examples below for an illustration.
-- Wild cards (i.e. `*`) can now be used in all variable lists
+- The wild card `*` can now be used in variable lists
 
 
 Syntax
@@ -77,7 +76,7 @@ syntax miModel [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) ///
 
 | argument       | description            |
 |----------------|------------------------|
-| *COMMONcov*    | covariates to be included in the scale item and stand-alone variable imputation models, supports factor variable syntax and wild cards|
+| *COMMONcov*    | covariates to be included in the scale item and stand-alone variable imputation models, partially supports factor variable syntax |
 | *MODel*        | model and options to be passed on to `mi impute chained` for every imputed scale and stand-alone variable; this is a conditionally required argument; see below for details |
 | *CONDImputed*  | conditional imputation; corresponds to `cond()` in `mi impute chained`; see below for syntax |
 | *CONDComplete* | imputation conditional on the values of a exogenous and complete regressor (specified in `COMMONcov`); see below for syntax |
@@ -117,7 +116,7 @@ Multiple models could be specified using the following syntax:
 
 The arguments that `miModel` takes are:
 
-- `dv`: a scale stub or a stand-alone dependent variable to be imputed. `dv` can also include a
+- `dv`: a scale stub or a stand-alone dependent variable to be imputed. `dv` can also include
    `*`, for stand-alone dependent variables, in which case identical models will be 
    created for all stand-alone variables that match the expression.
 - `covariateList`: an optional list of covariates to be included in the imputation equation for `dv`. 
@@ -475,9 +474,9 @@ pchained (s1_i i.x2, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) ///
          (ys* i.yz i.yx x5*, noimputed include(y*)), ///
           i(id) t(time) ///
           common(x1 i.x2 x3 y1 x5* x6) ///
-          mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" 
+          mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" ///
               s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)" ///
-              ys* = "pmm, knn(3)" y4 = "regress"
+              ys* = "pmm, knn(3)" y4 = "regress" ///
               y5 = "regress" y6 = "pmm, knn(3)") ///
           condc(s5_i = "if x5_base > -1" y6 = "if x5 >= 0" ys* = "if x6 > 0" ) ///
           condi(s6_i = "if mean(s1_i) > 0" y5 = "if y4 > -1") ///

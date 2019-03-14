@@ -1,4 +1,4 @@
-* Examples of Plumpton with -mi impute chained-
+* Examples of usage of -pchained-
 * Developers: Simo Goshev, Zitong Liu
 *
 *
@@ -275,9 +275,9 @@ pchained (s1_i i.x2, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) ///
          (ys* i.yz i.yx x5*, noimputed include(y*)),   ///
           i(id) t(time) ///
           common(x1 i.x2 x3 y1 x5* x6) ///
-          mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" 
+          mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" ///
               s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)" ///
-              ys* = "pmm, knn(3)" y4 = "regress"
+              ys* = "pmm, knn(3)" y4 = "regress" ///
               y5 = "regress" y6 = "pmm, knn(3)") ///
           condc(s5_i = "if x5_base > -1" y6 = "if x5 >= 0" ys* = "if x6 > 0" ) ///
           condi(s6_i = "if mean(s1_i) > 0" y5 = "if y4 > -1") ///
