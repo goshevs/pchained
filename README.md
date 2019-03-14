@@ -44,7 +44,7 @@ The following new features have been added to `pchained`:
 - Imputation subject to conditions. See options `CONDImputed` and `CONDComplete`
 - Imputation on a full set of scale items in addition to imputation on functions of scale items. 
 See examples below for an illustration.
-- Wildcards (i.e. `*`) can now be used in all variable lists
+- Wild cards (i.e. `*`) can now be used in all variable lists
 
 
 Syntax
@@ -118,7 +118,7 @@ Multiple models could be specified using the following syntax:
 The arguments that `miModel` takes are:
 
 - `dv`: a scale stub or a stand-alone dependent variable to be imputed. `dv` can also include a
-   wild card (i.e. `*`), for stand-alone dependent variables, in which case identical models will be 
+   `*`, for stand-alone dependent variables, in which case identical models will be 
    created for all stand-alone variables that match the expression.
 - `covariateList`: an optional list of covariates to be included in the imputation equation for `dv`. 
 - `options`: could be any set of:
@@ -428,7 +428,7 @@ pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*))
 
 
 ********************************************************************************
-***  Dv's with wild cards (very complex imputation model) ***	 
+***  Dv's with wild cards; model with conditions ***	 
 
 ***
 simdata 500 3
@@ -459,8 +459,8 @@ drop mymiss mymean
 replace y5 = -9999999 if y4 < 0
 replace y6 = -9999999 if x5 < 0
 
-replace ys1 =  -9999999 if x6 < 0
-replace ys2 =  -9999999 if x6 < 0
+replace ys1 = -9999999 if x6 < 0
+replace ys2 = -9999999 if x6 < 0
 
 *** >>>>>>>
 *>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -472,7 +472,7 @@ pchained (s1_i i.x2, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) ///
          (y4 i.yx i.yz x5* i.x2, include(y*) omit(x*)) ///
          (y5, noimputed omit(x* y*)) /// 
          (y6, noimputed omit(x* y*)) /// 
-         (ys* i.yz i.yx x5*, noimputed include(y*)),   ///
+         (ys* i.yz i.yx x5*, noimputed include(y*)), ///
           i(id) t(time) ///
           common(x1 i.x2 x3 y1 x5* x6) ///
           mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" 
