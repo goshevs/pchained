@@ -44,7 +44,7 @@ The following new features have been added to `pchained`:
 - Imputation subject to conditions. See options `CONDImputed` and `CONDComplete`
 - Imputation on a full set of scale items in addition to imputation on functions of scale items. 
 See examples below for an illustration.
-- Wildcards (i.e. `*`) can now be used in variable lists
+- Wildcards (i.e. `*`) can now be used in all variable lists
 
 
 Syntax
@@ -117,7 +117,9 @@ Multiple models could be specified using the following syntax:
 
 The arguments that `miModel` takes are:
 
-- `dv`: a scale stub or a stand-alone dependent variable to be imputed
+- `dv`: a scale stub or a stand-alone dependent variable to be imputed. `dv` can also include a
+   wild card (i.e. `*`), for stand-alone dependent variables, in which case identical models will be 
+   created for all stand-alone variables that match the expression.
 - `covariateList`: an optional list of covariates to be included in the imputation equation for `dv`. 
 - `options`: could be any set of:
 	- `scale`: has to be included if `dv` is a scale
@@ -396,7 +398,7 @@ foreach var of varlist s6_i* {
 
 drop mymiss mymean
 
-// assign a large number that can be replaced with missing after imputation
+// assign a large negative number that can be replaced with missing after imputation
 replace y5 = -9999999 if y4 < 0
 replace y6 = -9999999 if x5 < 0
  
@@ -422,6 +424,65 @@ pchained (s1_i, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*))
           condi(s6_i = "if mean(s1_i) > 0" y5 = "if y4 > -1") 
           mio(add(1) chaindots rseed(123456) dryrun);
 #d cr
+
+
+
+********************************************************************************
+***  Dv's with wild cards (very complex imputation model) ***	 
+
+***
+simdata 500 3
+
+bys id: gen x5_base = x5[1]
+
+*>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+*** >>>>>>> Ensuring the nesting conditions hold
+
+*** The following is IMPORTANT as otherwise Stata will throw an error
+*** For details see README and the Stata Manual
+
+foreach var of varlist s5_i* {
+	replace `var' = -9999999 if x5_base < 0
+}
+
+egen mymiss = rowmiss(s1_i*)
+egen mymean = rowmean(s1_i*)
+replace mymean = . if mymiss > 0
+		
+foreach var of varlist s6_i* {
+	replace `var' = -9999999 if mymean < 1
+}
+
+drop mymiss mymean
+
+// assign a large negative number that can be replaced with missing after imputation
+replace y5 = -9999999 if y4 < 0
+replace y6 = -9999999 if x5 < 0
+
+replace ys1 =  -9999999 if x6 < 0
+replace ys2 =  -9999999 if x6 < 0
+
+*** >>>>>>>
+*>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+pchained (s1_i i.x2, include(mean(s5_i s6_i) sum(s2_i)) scale omit(x*)) /// 
+         (s2_i, include(mean(s1_i) sum(s5_i s6_i)) scale omit(x5_base)) ///
+         (s5_i x3, include(mean(s1_i s2_i s6_i)) scale omit(x* y*)) ///
+         (s6_i, include(s1_i mean(s2_i s5_i)) scale omit(x5_base)) ///
+         (y4 i.yx i.yz x5* i.x2, include(y*) omit(x*)) ///
+         (y5, noimputed omit(x* y*)) /// 
+         (y6, noimputed omit(x* y*)) /// 
+         (ys* i.yz i.yx x5*, noimputed include(y*)),   ///
+          i(id) t(time) ///
+          common(x1 i.x2 x3 y1 x5* x6) ///
+          mod(s1_i = "pmm, knn(3)" s2_i = "pmm, knn(3)" 
+              s5_i = "pmm, knn(3)" s6_i = "pmm, knn(3)" ///
+              ys* = "pmm, knn(3)" y4 = "regress"
+              y5 = "regress" y6 = "pmm, knn(3)") ///
+          condc(s5_i = "if x5_base > -1" y6 = "if x5 >= 0" ys* = "if x6 > 0" ) ///
+          condi(s6_i = "if mean(s1_i) > 0" y5 = "if y4 > -1") ///
+          mio(add(1) chaindots rseed(123456) dryrun)
+		 
 
 
 ********************************************************************************

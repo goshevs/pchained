@@ -259,11 +259,11 @@ program define pchained, eclass
 		*** <><><> Checking validity of inputs for imputation subject to conditions 
 		
 		*** Checking condimputed() for invalid inputs 
-		_isInModel `"`condimputed'"' "cImp" "`miScale'" "`miSadv'"
+		noi _isInModel `"`condimputed'"' "cImp" "`miScale'" "`miSadv'" "" "`allOutcomes'"
 		
 		*** Checking condcomplete() for invalid inputs
 		sreturn clear
-		_isInModel `"`condcomplete'"' "" "`miScale'" "`miSadv'" "`plainCovs'"
+		noi _isInModel `"`condcomplete'"' "" "`miScale'" "`miSadv'" "`plainCovs'" "`allOutcomes'"
 
 			
 		
@@ -440,28 +440,30 @@ program define pchained, eclass
 				noi _imputationS2Cond `"`condcomplete'"' "`scale'" "`dVar'" "`timevar'" "" "`covInvar'" "`covVar'" "`depVarModOrig'" "Comp"
 				local condComp "`s(condComp)'"
 				
-				noi di "`dVar'"
-				noi di "Conditional imputation: `condImp'"
-				noi di "Condition: `condComp'"
-				
-				
-				
 				*** Collect all but current timepoints of dVar	
 				local dVarComplement ""
-				foreach rdVar of local dVarList { // more complex because of wild cards
-					*** Obtain the stub of sadv
-					if regexm("`dVar'", "(.+)_`timevar'[0-9]+$") {
-						local dVarStub "`=regexs(1)'"
-					}
-					*** Obtain the stub of rdVar
-					if regexm("`rdVar'", "(.+)_`timevar'[0-9]+$") {
-						local rdVarStub "`=regexs(1)'" 
-					}
-					if "`dVarStub'" == "`rdVarStub'" {
-						local dVarComplement "`dVarComplement' (`rdVar')"
+				if "`scale'" ~= "" {  // if var is a scale (we need all remaning items of the scale
+					local dVarRemaining: list dVarList - dVar
+					foreach myVar of local dVarRemaining {
+						local dVarComplement "`dVarComplement' (`myVar')"
 					}
 				}
-
+				else {  // if var is a sadv (we only need the remaning periods of the sadv)
+					foreach rdVar of local dVarList {
+						*** Obtain the stub of sadv
+						if regexm("`dVar'", "(.+)_`timevar'[0-9]+$") {
+							local dVarStub "`=regexs(1)'"
+						}
+						*** Obtain the stub of rdVar
+						if regexm("`rdVar'", "(.+)_`timevar'[0-9]+$") {
+							local rdVarStub "`=regexs(1)'" 
+						}
+						if "`dVarStub'" == "`rdVarStub'" {
+							local dVarComplement "`dVarComplement' (`rdVar')"
+						}
+					}
+				}
+				
 				*** Create the INCLUDE variable lists
 				if "`miIncVars'" ~= "" {					
 
@@ -769,7 +771,7 @@ end
 capture program drop _parseConditions
 program define _parseConditions, sclass
 
-	args myinput type
+	args myinput type allOutcomes
 	
 	local nlistex "[a-zA-Z(-0-9)_\(\)<>~=\.\&\| ]+"
 	local strregex "[a-zA-Z0-9\_\*]+[ ]*=[ ]*(\'|\")`nlistex'(\'|\")"
@@ -789,12 +791,25 @@ program define _parseConditions, sclass
 		local cond = subinstr(`"`cond'"', `"""',"",.)
 		local cond = subinstr(`"`cond'"', `"'"',"",.)
 		local sname = trim("`sname'")
+
 		
-		*** Drop asterisk from sname
+		*** Remove wild cards from all string
 		local sname = subinstr("`sname'", "*", "", .)
-		local sname = trim("`sname'")	
+		local allOutcomes = subinstr("`allOutcomes'","*","", .)
 		
-		* noi di `sname'"
+		*** Trim sname
+		local sname = trim("`sname'")	
+
+		*** <><><> Check if sname in variables included in the model
+		* noi di "`sname'"
+		* noi di "All outcomes: `allOutcomes'"
+		
+		if "`allOutcomes'" ~= "" {
+			if !`:list sname in allOutcomes' {
+				noi di in r _n "Error in condi() or condc(): `sname' not found in the model."
+				error 489
+			}
+		}
 		
 		*** parsing the if condition
 		local ifL "" // left side
@@ -829,9 +844,9 @@ end
 capture program drop _isInModel
 program define _isInModel, sclass
 
-	args condition type miScale miSadv covars
+	args condition type miScale miSadv covars allOutcomes
 	
-	_parseConditions `"`condition'"'
+	_parseConditions `"`condition'"' "" "`allOutcomes'"
 	
 	foreach side in "L" "R" {
 		foreach element in `:s(macros)' {
