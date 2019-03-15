@@ -1,6 +1,6 @@
 * Program -pchained- and utility functions
 * Authors: Simo Goshev, Zitong Liu
-* Version: 1.0
+* Version: 1.1
 *
 *
 *
@@ -392,7 +392,7 @@ program define pchained, eclass
 			* noi di "`miOmitVars'"   // omitted variables as enter into the syntax
 			* noi di "OMIT LIST: `miOmitList'"   // omitted variables as enter the model
 			
-	
+			
 			
 			*** --- BUILDING THE INPUT ---
 
@@ -401,15 +401,18 @@ program define pchained, eclass
 			local meanList ""     // list of means
 			local sumList ""      // list of sums
 			local rIncVarList ""  // list of remaining included variables
-			local rDepVars ""     // list of remaining included vars as required by mi impute chained
-			local rIncVarListFinal "" // final list of included variables as required by mi impute chained
-			
+
 			local condImp ""      // condition for conditional imputation
 			local condComp ""     // condition for imputation on exogenous/complete predictor
 
 			local scale ""        // only populated if var is a scale
-
+			local iDotSelf = 0
 			
+			*** Will the remaining values of the depvar be included as categorical vars?
+			if regexm("`miOpts'", "catself") {
+				local iDotSelf = 1
+				local miOpts "`=subinstr("`miOpts'", "catself","",.)'"
+			}			
 				
 			if `:list depVarMod in miScale' {            // building the list of items of the scale at all time points
 				*** Categorize the items of the scale
@@ -430,7 +433,13 @@ program define pchained, eclass
 
 			*** Outcomes in all time periods
 			foreach dVar of local dVarList {
-				 
+				
+				*** Define variable-specific locals
+				local rIncVarListFinal ""     // final list of included variables as required by mi impute chained
+				local rIncVarListUpdated ""   // list of valid included variables
+				local rDepVars ""             // list of remaining included vars as required by mi impute chained
+				local dVarComplement ""       // list of remaining depvars
+				
 				*** +++ Incorporate imputation subject to conditions, if provided
 				*** Conditional imputation
 				noi _imputationS2Cond `"`condimputed'"' "`scale'" "`dVar'" "`timevar'" "`miSadv'" "`covInvar'" "" "`depVarModOrig'"
@@ -441,11 +450,16 @@ program define pchained, eclass
 				local condComp "`s(condComp)'"
 				
 				*** Collect all but current timepoints of dVar	
-				local dVarComplement ""
 				if "`scale'" ~= "" {  // if var is a scale (we need all remaning items of the scale
 					local dVarRemaining: list dVarList - dVar
+					
 					foreach myVar of local dVarRemaining {
-						local dVarComplement "`dVarComplement' (`myVar')"
+						if `iDotSelf' {
+							local dVarComplement "`dVarComplement' i.`myVar'"
+						}
+						else {
+							local dVarComplement "`dVarComplement' (`myVar')"
+						}
 					}
 				}
 				else {  // if var is a sadv (we only need the remaning periods of the sadv)
@@ -459,10 +473,17 @@ program define pchained, eclass
 							local rdVarStub "`=regexs(1)'" 
 						}
 						if "`dVarStub'" == "`rdVarStub'" {
-							local dVarComplement "`dVarComplement' (`rdVar')"
+							if `iDotSelf' {
+								local dVarComplement "`dVarComplement' i.`rdVar'"
+							}
+							else {
+								local dVarComplement "`dVarComplement' (`rdVar')"
+							}
 						}
 					}
 				}
+
+				
 				
 				*** Create the INCLUDE variable lists
 				if "`miIncVars'" ~= "" {					
@@ -501,45 +522,76 @@ program define pchained, eclass
 					* noi di "`depVarMod': `rIncVarList'"
 					
 					*** <><><> Check for non-imputed variables and include only those vars that are in allOutcomes
-					*** except for the dep var itself
+					*** except for the dep var itself					
+
 					
-					local rIncVarListUpdated ""   // list of valid included variables
 					if "`rIncVarList'" ~= "" {
 						foreach rVar of local rIncVarList {
+						
+							local fVarOp ""               // contains i.
+							
+							*** Remove fvvarlist syntax
+							if regexm("`rVar'", "(i\.)(.+)") {  // remove fvvarlist syntax
+								local rVar "`=regexs(2)'"
+								local fVarOp "`=regexs(1)'"
+							}
 							*** Check if there is a wild card in rVar
+							
 							local wCard = strpos("`rVar'", "*")
 							if `wCard' ~= 0 {  // if there is a wild card
 								local preFix = substr("`rVar'", 1, `=`wCard' -1') // get the prefix
 								// go through the list of allOutcomes to see which they are
-								foreach out of local allOutcomes {
+								local allOutcomesRemaining: list allOutcomes - depVarMod
+								foreach out of local allOutcomesRemaining {
 									if "`=substr("`out'", 1, `=`wCard' -1')'" == "`preFix'" {
-										local rIncVarListUpdated "`rIncVarListUpdated' `out'"
+										local rIncVarListUpdated "`rIncVarListUpdated' `fVarOp'`out'"
 									}
 								}
 							}
 							else {  // there is no wild card
-								local rIncVarListUpdated "`rIncVarListUpdated' `rVar'"
+								local rIncVarListUpdated "`rIncVarListUpdated' `fVarOp'`rVar'"
 							}
 						}
-						local rIncVarListUpdated: list rIncVarListUpdated - depVarMod // remove current outcome from list
-					
-						*** Create the final complete list of included variables
-						foreach finalVar of local rIncVarListUpdated {
-							unab collection: `finalVar'*
-							local rIncVarListFinal "`rIncVarListFinal' `collection'"
-						}
-						* noi di "`depVarMod':: `rIncVarListFinal'"
 					}
 				}  // end of INCLUDE
 				
-				*** Write out the include varlist as required by -mi impute chained-
+				*** Create the final complete INCLUDE list
+				foreach finalVar of local rIncVarListUpdated {
+					fvunab collection: `finalVar'*
+					local rIncVarListFinal "`rIncVarListFinal' `collection'"
+				}
+				
 				if "`rIncVarListFinal'" ~= "" { 
+					*** <><><> Check whether duplicated vars in dVarComplement and rIncVarListFinal and remove them
+					local dVarComplementPlain = subinstr("`dVarComplement'", "(","",.)
+					local dVarComplementPlain = subinstr("`dVarComplementPlain'", ")","",.)
+					
+					fvrevar `dVarComplementPlain', list
+					local dVarComplementPlain "`r(varlist)'"
+					
+					fvrevar `rIncVarListFinal', list
+					local rIncVarListPlain "`r(varlist)'"
+					
+					local dups: list dVarComplementPlain & rIncVarListPlain
+					
+					*** Write out the rDepVars, other included dependent variables
+					**** Here consider fvvarlist syntax
 					foreach mydVar of local rIncVarListFinal {
-						local rDepVars "`rDepVars' (`mydVar')"
+						if regexm("`mydVar'", "i\.(.+)") {
+							local mydVarPlain "`=regexs(1)'"
+							if !`:list mydVarPlain in dups' {
+								local rDepVars "`rDepVars' `mydVar'"
+							}
+						}
+						else {
+							if !`:list mydVar in dups' {
+								local rDepVars "`rDepVars' (`mydVar')"
+							}
+						}
 					}
 				}
-						
-				*** Write out the INCLUDE option as it should enter the model
+				
+				*** Combine commands and write out the INCLUDE option as it should enter the model
 				local includeOpt "`miCovList' `meanList' `sumList'"
 				if regexm("`miOpts'", "noimputed") {
 					*** If no imputed variables will be included, add remaining outcomes and dependent vars
