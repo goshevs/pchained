@@ -50,13 +50,13 @@ Syntax
 ---
 
 ```
-syntax miModel [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
-                         [COMMONcov(string asis) MODel(string asis)  ///
-                          CONDImputed(string asis) CONDComplete(string asis)  ///
-                          CATCutoff(integer 10)  MINCsize(integer 0) ///
-                          NAcode(integer -9999999) ///
-                          MIOptions(string asis) MERGOptions(string asis) ///
-                          SAVEmidata(string) PRINTmodel suspend debug] 
+pchained miModel [if] [in] [pw aw fw iw/], Ivar(varlist) Timevar(varname) /// 
+                           [COMMONcov(string asis) MODel(string asis)  ///
+                            CONDImputed(string asis) CONDComplete(string asis)  ///
+                            CATCutoff(integer 10)  MINCsize(integer 0) ///
+                            NAcode(integer -9999999) ///
+                            MIOptions(string asis) MERGOptions(string asis) ///
+                            SAVEmidata(string) PRINTmodel suspend debug] 
 ```
 <br>
 
