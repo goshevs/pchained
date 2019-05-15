@@ -70,7 +70,10 @@ program define pchained, eclass
 					local mioptions = regexr("`mioptions'", "add\([0-9]+\)", "add(`nAdd')")
 				}			
 			}	
-			
+			// check and remove rseed if included in mioptions under parallelize
+			if regexm("`mioptions'", "rseed\([0-9]+\)") & "`c(prefix)'" == "parallelize" {
+				local mioptions = regexr("`mioptions'", "rseed\([0-9]+\)", "")			
+			}
 			// check for by and retrieve the by varname
 			if regexm("`mioptions'", "by\([a-zA-Z0-9]+\)") {
 				local myby "`=regexs(0)'"
