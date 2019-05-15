@@ -48,19 +48,36 @@ program define pchained, eclass
 		
 		************************************************************************
 		**** Assigning default values
-		
-		*** Default scoretype to mean
-		if "`scoretype'" == "" local scoretype "mean"
 
+		*** Default number of added datasets
+		local nAdd = 5
+		
+		*** For parallel processing
+		if "`c(prefix)'" == "parallelize" {
+			local nAdd = 1
+		}
+			
 		*** Default mioptions
 		if "`mioptions'" == "" {
-			local mioptions "add(5)"
-		} // if not empty, check for by and retrieve the by varname
-		else if regexm("`mioptions'", "by\([a-zA-Z0-9]+\)") {
-			local myby "`=regexs(0)'"
-			gettoken left gr: myby, parse("(")
-			gettoken left gr: gr, parse("(")
-			gettoken byGroup right: gr, parse(")")
+			local mioptions "add(`nAdd')"
+		} 
+		else {
+			// check for add() and replace with `nAdd' if parallelize
+			if regexm("`mioptions'", "add\(([0-9]+)\)") {
+				local myAdd "`=regexs(1)'"
+				if (`myAdd' ~= 1 & "`c(prefix)'" == "parallelize") {
+					// replace add(??) with add(`nAdd') in mioptions
+					local mioptions = regexr("`mioptions'", "add\([0-9]+\)", "add(`nAdd')")
+				}			
+			}	
+			
+			// check for by and retrieve the by varname
+			if regexm("`mioptions'", "by\([a-zA-Z0-9]+\)") {
+				local myby "`=regexs(0)'"
+				gettoken left gr: myby, parse("(")
+				gettoken left gr: gr, parse("(")
+				gettoken byGroup right: gr, parse(")")
+			}
 		}
 		
 		*** Default mergoptions
@@ -730,7 +747,7 @@ program define pchained, eclass
 		noi mi merge m:1 `ivar' `timevar' using "`originalData'" `mergoptions'
 		mi update
 		
-		noi di _n in y "Imputation finished successfully."
+		noi di _n in y "Imputation completed successfully."
 
 	} // end of quietly
 	
