@@ -67,14 +67,14 @@ program define pchained, eclass
 			// check for add() and replace with `nAdd' if parallelize
 			if regexm("`mioptions'", "add\(([0-9]+)\)") {
 				local myAdd "`=regexs(1)'"
-				if (`myAdd' ~= 1 & "`c(prefix)'" == "parallelize") {
+				if (`myAdd' ~= 1 & "`parallel'" == "parallelize") {
 					// replace add(??) with add(`nAdd') in mioptions
 					local mioptions = regexr("`mioptions'", "add\([0-9]+\)", "add(`nAdd')")
 					noi di _n in y "Defaulted to 1 imputated dataset"
 				}			
 			}	
 			// check and remove rseed if included in mioptions under parallelize
-			if regexm("`mioptions'", "rseed\([0-9]+\)") & "`c(prefix)'" == "parallelize" {
+			if regexm("`mioptions'", "rseed\([0-9]+\)") & "`parallel'" == "parallelize" {
 				local mioptions = regexr("`mioptions'", "rseed\([0-9]+\)", "")
 				noi di _n in y "Removed user provided seed"
 				
@@ -725,7 +725,7 @@ program define pchained, eclass
 		noi di _n in y "Performing multiple imputation..."
 		
 		noi mi impute chained `modelComplete'
-
+		
 		
 		************************************************************************
 		*** Manage dataset after imputation
@@ -743,6 +743,18 @@ program define pchained, eclass
 				exit 486
 			}
 		}
+		
+		*** Re-register imputed variables
+		local depVars
+		foreach var of local depVarCompleteList {
+			if regexm("`var'", "(.+)_`timevar'.+") {
+				local myNewVar "`=regexs(1)'"
+				local depVars "`depVars' `myNewVar'"
+			}
+		}
+		local depVars: list uniq depVars
+		mi register imputed `depVars'
+		
 		
 		*** Save the dataset
 		if "`savemidata'" ~= "" {
