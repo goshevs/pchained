@@ -53,7 +53,9 @@ program define pchained, eclass
 		local nAdd = 5
 		
 		*** For parallel processing
-		if "`c(prefix)'" == "parallelize" {
+		local parallel "`c(prefix)'"
+		
+		if "`parallel'" == "parallelize" {
 			local nAdd = 1
 		}
 			
@@ -68,11 +70,14 @@ program define pchained, eclass
 				if (`myAdd' ~= 1 & "`c(prefix)'" == "parallelize") {
 					// replace add(??) with add(`nAdd') in mioptions
 					local mioptions = regexr("`mioptions'", "add\([0-9]+\)", "add(`nAdd')")
+					noi di _n in y "Defaulted to 1 imputated dataset"
 				}			
 			}	
 			// check and remove rseed if included in mioptions under parallelize
 			if regexm("`mioptions'", "rseed\([0-9]+\)") & "`c(prefix)'" == "parallelize" {
-				local mioptions = regexr("`mioptions'", "rseed\([0-9]+\)", "")			
+				local mioptions = regexr("`mioptions'", "rseed\([0-9]+\)", "")
+				noi di _n in y "Removed user provided seed"
+				
 			}
 			// check for by and retrieve the by varname
 			if regexm("`mioptions'", "by\([a-zA-Z0-9]+\)") {
@@ -745,10 +750,12 @@ program define pchained, eclass
 			save "`savemidata'", replace
 		}
 		
-		*** Merge the midata into the original dataset
-		noi di _n in y "Merging imputed dataset with original dataset..."
-		noi mi merge m:1 `ivar' `timevar' using "`originalData'" `mergoptions'
-		mi update
+		if "`parallel'" == "" {
+			*** Merge the midata into the original dataset
+			noi di _n in y "Merging imputed dataset with original dataset..."
+			noi mi merge m:1 `ivar' `timevar' using "`originalData'" `mergoptions'
+			mi update
+		}
 		
 		noi di _n in y "Imputation completed successfully."
 
