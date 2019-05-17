@@ -20,19 +20,8 @@ simdata 200 3
 preserve
 pchained (s1_i, noimputed scale), ///
           i(id) t(time) ///
-          mio(add(1) chaindots rseed(123456))
-save __1__mydata, replace
-restore
-
-pchained (s1_i, noimputed scale), ///
-          i(id) t(time) ///
-          mio(add(1) chaindots rseed(23456))
-save __2__mydata, replace
-
-use __1__mydata, clear
-mi add id time using __2__mydata
-exit
-		  
+          mio(add(1) chaindots rseed(123456) dryrun)
+	  
 *** Categorical items plus covariates
 simdata 200 3
 pchained (s1_i, noimputed scale), ///

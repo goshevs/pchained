@@ -744,7 +744,7 @@ program define pchained, eclass
 			}
 		}
 		
-		*** Re-register imputed variables
+		*** Extract all dependant variables in their original format
 		local depVars
 		foreach var of local depVarCompleteList {
 			if regexm("`var'", "(.+)_`timevar'.+") {
@@ -752,6 +752,8 @@ program define pchained, eclass
 				local depVars "`depVars' `myNewVar'"
 			}
 		}
+		
+		*** Register all depvars in their original format as imputed
 		local depVars: list uniq depVars
 		mi register imputed `depVars'
 		
