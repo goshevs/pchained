@@ -9,7 +9,7 @@ Stata command `pchained`
 Introduction
 ---
 
-This is a new Stata command which wraps `mi impute chained` and 
+This new Stata command wraps `mi impute chained` and 
 offers simplified syntax for imputing missing values in longitudinal data. 
 It also provides functionality for conducting scale imputation at the item level,
 including Plumpton-style chained imputation of scales (Plumpton, 2016).
@@ -44,6 +44,8 @@ The following new features have been added to `pchained`:
 - Imputation subject to conditions. See options `CONDImputed` and `CONDComplete`
 - Imputation on a full set of scale items in addition to imputation on functions of scale items. 
 - The wild card `*` can now be used in variable lists
+- Can be parallelized on a computing cluster running Torque; see [parallelize](https://github.com/goshevs/parallelize)  
+for details. 
 
 
 Syntax

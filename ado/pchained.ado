@@ -53,9 +53,9 @@ program define pchained, eclass
 		local nAdd = 5
 		
 		*** For parallel processing
-		local parallel "`c(prefix)'"
+		local prefix "`c(prefix)'"
 		
-		if "`parallel'" == "parallelize" {
+		if "`prefix'" == "parallelize" {
 			local nAdd = 1
 		}
 			
@@ -67,16 +67,16 @@ program define pchained, eclass
 			// check for add() and replace with `nAdd' if parallelize
 			if regexm("`mioptions'", "add\(([0-9]+)\)") {
 				local myAdd "`=regexs(1)'"
-				if (`myAdd' ~= 1 & "`parallel'" == "parallelize") {
+				if (`myAdd' ~= 1 & "`prefix'" == "parallelize") {
 					// replace add(??) with add(`nAdd') in mioptions
 					local mioptions = regexr("`mioptions'", "add\([0-9]+\)", "add(`nAdd')")
-					noi di _n in y "Defaulted to 1 imputated dataset"
+					noi di _n in y "Defaulted to 1 imputation to be added"
 				}			
 			}	
 			// check and remove rseed if included in mioptions under parallelize
-			if regexm("`mioptions'", "rseed\([0-9]+\)") & "`parallel'" == "parallelize" {
+			if regexm("`mioptions'", "rseed\([0-9]+\)") & "`prefix'" == "parallelize" {
 				local mioptions = regexr("`mioptions'", "rseed\([0-9]+\)", "")
-				noi di _n in y "Removed user provided seed"
+				noi di _n in y "Removed user provided seed of the random generator"
 				
 			}
 			// check for by and retrieve the by varname
@@ -744,7 +744,7 @@ program define pchained, eclass
 			}
 		}
 		
-		*** Extract all dependant variables in their original format
+		*** Extract original dependant variable names
 		local depVars
 		foreach var of local depVarCompleteList {
 			if regexm("`var'", "(.+)_`timevar'.+") {
@@ -753,7 +753,7 @@ program define pchained, eclass
 			}
 		}
 		
-		*** Register all depvars in their original format as imputed
+		*** Register depvars in their original names as imputed
 		local depVars: list uniq depVars
 		mi register imputed `depVars'
 		
@@ -764,7 +764,7 @@ program define pchained, eclass
 			save "`savemidata'", replace
 		}
 		
-		if "`parallel'" == "" {
+		if "`prefix'" ~= "parallelize" {
 			*** Merge the midata into the original dataset
 			noi di _n in y "Merging imputed dataset with original dataset..."
 			noi mi merge m:1 `ivar' `timevar' using "`originalData'" `mergoptions'
