@@ -21,7 +21,7 @@ Installation
 To load `pchained`, include the following line in your do file:
 
 ```
-qui do "https://raw.githubusercontent.com/goshevs/pchained/master/pchained.ado"
+qui do "https://raw.githubusercontent.com/goshevs/pchained/master/ado/pchained.ado"
 ```
 
 
