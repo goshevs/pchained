@@ -1,8 +1,8 @@
 Stata command `pchained`
 ===
 
-*Developers*: Simo Goshev, Zitong Liu   
-*Maintainer*: Simo Goshev  
+*Lead developer and maintainer*: Simo Goshev
+*Developers*: Zitong Liu   
 *Group*: BC Research Services
 
 
@@ -21,7 +21,7 @@ Installation
 To load `pchained`, include the following line in your do file:
 
 ```
-qui do "https://raw.githubusercontent.com/goshevs/pchained/master/ado/pchained.ado"
+do "https://raw.githubusercontent.com/goshevs/pchained/master/ado/pchained.ado"
 ```
 
 
@@ -30,9 +30,9 @@ What's new?
 
 **Critical changes**
 
-The most recent release, `pchained` v.1.0, unifies model definition for
-imputed variables, scales or stand-alone dependent variables, and simplifies 
-syntax while providing a much greater degree of flexibility in model specification.
+This release of `pchained` unifies model definition for imputed variables, scales 
+or stand-alone dependent variables, and simplifies syntax while providing a much 
+greater degree of flexibility in model specification.
  
 This version of `pchained` is **not backward compatible** and therefore old code
 has to be updated to the new syntax to ensure proper operation.
