@@ -1,7 +1,7 @@
 Stata command `pchained`
 ===
 
-*Lead developer and maintainer*: Simo Goshev
+*Lead developer and maintainer*: Simo Goshev  
 *Developers*: Zitong Liu   
 *Group*: BC Research Services
 
