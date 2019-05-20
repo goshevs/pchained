@@ -44,8 +44,7 @@ The following new features have been added to `pchained`:
 - Imputation subject to conditions. See options `CONDImputed` and `CONDComplete`
 - Imputation on a full set of scale items in addition to imputation on functions of scale items. 
 - The wild card `*` can now be used in variable lists
-- Can be parallelized on a computing cluster running Torque; see [parallelize](https://github.com/goshevs/parallelize)  
-for details. 
+- Can be parallelized on a computing cluster running Torque; see [parallelize](https://github.com/goshevs/parallelize) for details. 
 
 
 Syntax
