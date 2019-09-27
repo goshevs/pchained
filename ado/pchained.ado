@@ -1024,7 +1024,9 @@ program define _scaleItemCategorization, sclass
 	
 	local constant ""  // constant items
 	local rare ""      // items with rare categories 
-	local cuscont ""   // Items designated as continous by user
+	local noobs ""     // items with no observations
+	
+  	local cuscont ""   // Items designated as continous by user
 
 	local finalScale ""   // admitted items
 	
@@ -1074,47 +1076,54 @@ program define _scaleItemCategorization, sclass
 			*** Observed values
 			capture tab `item' if `item' ~= `nacode', matrow(`vals') matcell(`freqs')
 			if (_rc == 0) {  // if does not break tab
-				mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
+				if (`r(N)' == 0) {  // this is no observations case --> expluded vars 
+					*** exclude from variables!
+					local noobs "`noobs' `item'"
+				}			
 
-/*
-				*** Giving labels precedence
-				if ("`uselabels'" ~= "") {  // user override for categories; use labels
-					if ("`nCatsLab'" ~= "") {
-						scalar `nCats' = `nCatsLab'
-					}
-					else {
-						di in r "No label exists for this item/scale."
-						exit 1000
-					}
-			}
-*/
-				* noi di `nCats'
-				if (`nCats'  < `catcutoff') {  // item is categorical
-					if (`nCats'  == 1)  {
-						local constant "`constant' `item'" 
-					}
-					else {  // more than 1 categories
-						mata: st_numscalar("`pCats'", colsum(mm_cond(st_matrix("`freqs'") :< `mincsize', 1,0))) // min # of obs per cat 
-						**** IMPORTANT Zitong's Note. This might be problematic because 
-						****   there may exists some "rare categories" while we have enough points for other categories. 
-						if (`pCats' > 0) {
-							local rare "`rare' `item'"
+				else {  // observations exist
+					mata: st_numscalar("`nCats'", rows(st_matrix("`vals'"))) // number of categories
+
+	                 /*
+					*** Giving labels precedence
+					if ("`uselabels'" ~= "") {  // user override for categories; use labels
+						if ("`nCatsLab'" ~= "") {
+							scalar `nCats' = `nCatsLab'
 						}
-						else {   // if not rare
-							if (`nCats' == 2) { // Binary
-								local bin "`bin' `item'"
-							}
-							else {  // Multi-category
-								local cat "`cat' `item'"
-							}
-							local finalScale "`finalScale' `item'"
+						else {
+							di in r "No label exists for this item/scale."
+							exit 1000
 						}
+	                 */
+					* noi di `nCats'
+					if (`nCats'  < `catcutoff') {  // item is categorical
+						if (`nCats'  == 1)  {
+							local constant "`constant' `item'" 
+						}
+						else {  // more than 1 categories
+							mata: st_numscalar("`pCats'", colsum(mm_cond(st_matrix("`freqs'") :< `mincsize', 1,0))) // min # of obs per cat 
+							**** IMPORTANT Zitong's Note. This might be problematic because 
+							****   there may exists some "rare categories" while we have enough points for other categories. 
+							
+							if (`pCats' > 0) {
+								local rare "`rare' `item'"
+							}
+							else {   // if not rare
+								if (`nCats' == 2) { // Binary
+									local bin "`bin' `item'"
+								}
+								else {  // Multi-category
+									local cat "`cat' `item'"
+								}
+								local finalScale "`finalScale' `item'"
+							}
+						}
+					} // end of if  
+					else { // item is continuous
+						local cont "`cont' `item'"
+						local finalScale "`finalScale' `item'" // Continous vars pass directly
 					}
-				} // end of if  
-				else { // item is continuous
-					local cont "`cont' `item'"
-					local finalScale "`finalScale' `item'" // Continous vars pass directly
-				}
+				} // 
 			} //end of _rc == 0
 			else if (_rc == 134)  { // item is continuous
 				local cont "`cont' `item'"
@@ -1123,7 +1132,7 @@ program define _scaleItemCategorization, sclass
 			else {
 				di in r "Cannot classify `item'"
 				exit 1000
-			}
+			} //observarions exist
 		} // end loop over items
 	} // end of else in userOverride
 
@@ -1141,7 +1150,8 @@ program define _scaleItemCategorization, sclass
 	"        User defined : `:word count `cuscont''" _n ///
 	"   *Excluded items*: " _n ///
 	"        Constant items: `constant'" _n ///
-	"        Items with level count < `mincsize': `rare'" _n ///	
+	"        Items with level count < `mincsize': `rare'" _n ///
+	"        Items with non-existing observations: `noobs'" _n /// 
 	"Final number of items: `:word count `finalScale''" _n ///
 	"********************************************************"
 	
@@ -1150,6 +1160,7 @@ program define _scaleItemCategorization, sclass
 	sreturn local rare "`rare'"
 	sreturn local bin "`bin'"
 	sreturn local mCat "`cat'"
+	sreturn local noobs "`noobs'"
 	sreturn local contUI "`cuscont'" 
 	
 end
