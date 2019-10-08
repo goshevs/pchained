@@ -327,7 +327,49 @@ program define pchained, eclass
 				
 		* noi di "`commoncov'"      // common covariates as enter into the syntax
 		* noi di "`miComCovList'"   // common covariates as enter the model
+	
+
+		************************************************************************
+		*** Creating the list of admissible scale items/sadv
+
+		local myAdmissibleItems ""  // use to filter RHS items
+		local myAdmissibleSadv  ""  // use to filter RHS sadv
+			
+		_parseAnything "`anything'"
 		
+		local iterModels = 1
+		while `"`s(model`iterModels')'"' ~= "" {
+			*** Parse the syntax of the model
+			_parseModels "`s(model`iterModels')'"
+			local depVarMod "`s(depv)'"
+			
+			*** Remove wildcard if present
+			local depVarModOrig ""
+			local wCard = strpos("`depVarMod'", "*")
+			if `wCard' ~= 0 {
+				local depVarMod = substr("`depVarMod'", 1, `=`wCard' -1')
+			}
+			if `:list depVarMod in miScale' {  
+				qui _scaleItemCategorization "`depVarMod'" "`isContScale'" "`catcutoff'" "`mincsize'" "`nacode'" "`timelevs'"				
+				local myAdmissibleItems "`myAdmissibleItems' `s(finalScale)'"
+			}
+			else {  // if outcome is a sadv
+				unab dVarList: `depVarMod'*             // building the list of sadv at all time points
+				* noi di "`dVarList'"
+				foreach mySadv of local dVarList {
+					qui sum `mySadv'
+					if `r(N)' != 0 {
+						local myAdmissibleSadv "`myAdmissibleSadv' `mySadv'"
+					}
+				}
+			}
+			local ++iterModels
+			_parseAnything "`anything'"
+
+		}
+		local myAdmissibleVars "`myAdmissibleItems' `myAdmissibleSadv'"
+
+
 		************************************************************************
 		*** Building the model
 		
@@ -446,11 +488,14 @@ program define pchained, eclass
 				local itemsBin "`s(bin)'"
 				local itemsMCat "`s(mCat)'"
 				local itemsCon "`s(contUI)'"
-				
+				local itemsNoObs "`s(noobs)'"   // items with no observations!
 				local scale "`depVarMod'"
 			}
 			else {  // if outcome is a sadv
 				unab dVarList: `depVarMod'*             // building the list of sadv at all time points
+				* noi di "PRE: ====>  `dVarList'"
+				local dVarList: list dVarList & myAdmissibleSadv     // restrict to admissible sadvs
+				* noi di "POST: ====>  `dVarList'"
 			}
 			
 			*** Collect all dVarLists
@@ -478,6 +523,11 @@ program define pchained, eclass
 				if "`scale'" ~= "" {  // if var is a scale (we need all remaning items of the scale
 					local dVarRemaining: list dVarList - dVar
 					
+					** Limit items to admissible items 
+					* noi di "PRE1: `dVar' ==> `dVarRemaining'"
+					local dVarRemaining: list dVarRemaining & myAdmissibleItems
+					* noi di "POST1: `dVar' ==> `dVarRemaining'"
+					
 					foreach myVar of local dVarRemaining {
 						if `iDotSelf' {
 							local dVarComplement "`dVarComplement' i.`myVar'"
@@ -488,6 +538,12 @@ program define pchained, eclass
 					}
 				}
 				else {  // if var is a sadv (we only need the remaning periods of the sadv)
+					
+					** Limit sadv to admissible sadv
+					* noi di "SADV PRE: `dVar' ==> `dVarList'"
+					local dVarList: list dVarList & myAdmissibleSadv
+					* noi di "SADV POS: `dVar' ==> `dVarList'"
+					
 					foreach rdVar of local dVarList {
 						*** Obtain the stub of sadv
 						if regexm("`dVar'", "(.+)_`timevar'[0-9]+$") {
@@ -521,12 +577,13 @@ program define pchained, eclass
 					if regexm("`dVar'","_`timevar'([0-9]+)$") {
 						local timePeriod `=regexs(1)'
 					}					
+				
 					*** Create --MEAN-- scores
 					if regexm("`miIncVars'","mean\(([a-zA-Z0-9_ ]+)\)") {
 						local meanList `=regexs(1)'
 						local meanRemove `=regexs(0)'
 						// ()()() option: to replace from period-specific to all periods, replace timePeriod with timelevs
-						_meanSumInclude "`meanList'" "mean" "`timevar'" "`timelevs'"
+						noi _meanSumInclude "`meanList'" "mean" "`timevar'" "`timelevs'" "`myAdmissibleItems'"
 						local meanList "`s(include_items)'"
 					}
 					*** Create --SUM-- scores
@@ -534,16 +591,17 @@ program define pchained, eclass
 						local sumList `=regexs(1)'
 						local sumRemove `=regexs(0)'
 						// ()()() option: to replace from period-specific to all periods, replace timePeriod with timelevs
-						_meanSumInclude "`sumList'" "sum" "`timevar'" "`timelevs'"
+						noi _meanSumInclude "`sumList'" "sum" "`timevar'" "`timelevs'" "`myAdmissibleItems'"
 						local sumList "`s(include_items)'"
 					}
-					
+
 					*** Remaining variables in include
 					
 					local rIncVarList = subinstr("`miIncVars'","`meanRemove'", "", .)
 					local rIncVarList = subinstr("`rIncVarList'","`sumRemove'", "", .)
 					local rIncVarList = stritrim("`rIncVarList'")
 					
+					* noi di "`dVar' ==> `rIncVarList'"
 					* noi di "`depVarMod': `rIncVarList'"
 					
 					*** <><><> Check for non-imputed variables and include only those vars that are in allOutcomes
@@ -578,6 +636,8 @@ program define pchained, eclass
 							}
 						}
 					}
+					* noi di "`dVar' ==>>>>> `rIncVarListUpdated'"
+					
 				}  // end of INCLUDE
 				
 				*** Create the final complete INCLUDE list
@@ -585,6 +645,7 @@ program define pchained, eclass
 					fvunab collection: `finalVar'*
 					local rIncVarListFinal "`rIncVarListFinal' `collection'"
 				}
+				* noi di "LIST FINAL: `rIncVarListFinal'"
 				
 				if "`rIncVarListFinal'" ~= "" { 
 					*** <><><> Check whether duplicated vars in dVarComplement and rIncVarListFinal and remove them
@@ -598,22 +659,25 @@ program define pchained, eclass
 					local rIncVarListPlain "`r(varlist)'"
 					
 					local dups: list dVarComplementPlain & rIncVarListPlain
-					
+			
 					*** Write out the rDepVars, other included dependent variables
 					**** Here consider fvvarlist syntax
+
 					foreach mydVar of local rIncVarListFinal {
 						if regexm("`mydVar'", "i\.(.+)") {
 							local mydVarPlain "`=regexs(1)'"
-							if !`:list mydVarPlain in dups' {
+							
+							if (!`:list mydVarPlain in dups') & (`:list mydVarPlain in myAdmissibleVars') {
 								local rDepVars "`rDepVars' `mydVar'"
 							}
 						}
 						else {
-							if !`:list mydVar in dups' {
+							if (!`:list mydVar in dups') & (`:list mydVar in myAdmissibleVars'){
 								local rDepVars "`rDepVars' (`mydVar')"
 							}
 						}
 					}
+					* noi di "rDEPVARS: `dVar' =======> `rDepVars'"
 				}
 				
 				*** Combine commands and write out the INCLUDE option as it should enter the model
@@ -1076,7 +1140,7 @@ program define _scaleItemCategorization, sclass
 			*** Observed values
 			capture tab `item' if `item' ~= `nacode', matrow(`vals') matcell(`freqs')
 			if (_rc == 0) {  // if does not break tab
-				if (`r(N)' == 0) {  // this is no observations case --> expluded vars 
+				if (`r(N)' == 0) {  // this is no observations case --> excluded vars 
 					*** exclude from variables!
 					local noobs "`noobs' `item'"
 				}			
@@ -1151,7 +1215,7 @@ program define _scaleItemCategorization, sclass
 	"   *Excluded items*: " _n ///
 	"        Constant items: `constant'" _n ///
 	"        Items with level count < `mincsize': `rare'" _n ///
-	"        Items with non-existing observations: `noobs'" _n /// 
+	"        Items with 100% missingness: `noobs'" _n /// 
 	"Final number of items: `:word count `finalScale''" _n ///
 	"********************************************************"
 	
@@ -1165,11 +1229,12 @@ program define _scaleItemCategorization, sclass
 	
 end
 
+
 *** Creates the mean/sum score syntax for include()
 capture program drop _meanSumInclude
 program define _meanSumInclude, sclass
 
-	args mylist scoretype timevar timelevs
+	args mylist scoretype timevar timelevs admissibleVars
 
 	local include_items ""
 	
@@ -1186,19 +1251,25 @@ program define _meanSumInclude, sclass
 					local taggregs "`taggregs' `=regexs(0)'"
 				}
 			}
-			* noi di "`taggregs'"	
-			*** This is where we write out the functions
-			local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
-			if "`scoretype'" == "sum" {
-				local include_items "`include_items' (`mysum')"
-			}	
-			else if "`scoretype'" == "mean" {
-				local nitems: word count `taggregs'	
-				local include_items "`include_items' (`mysum'/`nitems')"
-			}
-			else {
-				di in r "`scoretype' is not allowed as a score type"
-				exit 198
+			
+			* noi di "Pre `taggregs'"
+			local taggregs: list taggregs & admissibleVars // filter taggregs
+			* noi di "Post: `taggregs'"
+			
+			if "`taggregs'" ~= "" {
+				*** This is where we write out the functions
+				local mysum "(`=subinstr("`=trim("`taggregs'")'", " ", "+", .)')"
+				if "`scoretype'" == "sum" {
+					local include_items "`include_items' (`mysum')"
+				}	
+				else if "`scoretype'" == "mean" {
+					local nitems: word count `taggregs'	
+					local include_items "`include_items' (`mysum'/`nitems')"
+				}
+				else {
+					di in r "`scoretype' is not allowed as a score type"
+					exit 198
+				}
 			}
 		}
 	}

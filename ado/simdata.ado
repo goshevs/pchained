@@ -13,7 +13,7 @@
 
 capture program drop simdata
 program define simdata
-	args samSize waves
+	args samSize waves missWave
 	
 	qui {
 		clear
@@ -63,7 +63,9 @@ program define simdata
 		bys id: gen y4 = round(rnormal())
 		bys id: gen y5 = cond(y4 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
 		bys id: gen y6 = cond(x5 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
-			
+		gen y7 = round(1 + 3 * runiform())
+		recast int y7		
+		
 		bys id: gen ys1 = cond(x6 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
 		bys id: gen ys2 = cond(x6 >= 0, cond(runiform() > 0.2, rnormal(), .), .)
 		
@@ -137,7 +139,13 @@ program define simdata
 		
 		drop mymiss mymean
 		
+		replace y7 = . if runiform() < 0.10
 		
+		if "`missWave'" ~= "" {
+			replace y7 = . if time == `missWave'		
+			replace s2_i1 = . if time == `missWave'
+			replace s2_i2 = . if time == `missWave'
+		}
 		
 		********************************************************************************
 		*** Split the sample into two groups
